@@ -67,14 +67,7 @@ export function SopEdge({
           orient="auto"
           markerUnits="userSpaceOnUse"
         >
-          <path
-            d="M 1,1 L 7,4 L 1,7"
-            fill="none"
-            stroke={stroke}
-            strokeWidth={1.3}
-            strokeLinecap="round"
-            strokeLinejoin="round"
-          />
+          <path d="M 1,1 L 7,4 L 1,7 Z" fill={stroke} stroke="none" />
         </marker>
       </defs>
       <BaseEdge

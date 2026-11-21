@@ -11,6 +11,45 @@ const box = (id: string, x: number, y: number, width = 120, height = 80) => ({
 });
 
 describe("画板连线路由", () => {
+  it("并排节点的窄缝不会压缩上方入线，箭头前保留完整直线段", () => {
+    const edges = routeCanvasEdges(
+      [
+        box("branch", 112, 0, 216, 100),
+        box("yes", 0, 220, 216, 100),
+        box("no", 224, 220, 216, 100),
+      ],
+      [
+        {
+          id: "yes", source: "branch", target: "yes",
+          sourceHandle: "yes", targetHandle: "in",
+        },
+        {
+          id: "no", source: "branch", target: "no",
+          sourceHandle: "no", targetHandle: "in",
+        },
+      ],
+      new Map([
+        ["branch", [
+          { id: "yes", side: Position.Bottom, offset: 1 / 3 },
+          { id: "no", side: Position.Bottom, offset: 2 / 3 },
+        ]],
+        ["yes", [{ id: "in", side: Position.Top }]],
+        ["no", [{ id: "in", side: Position.Top }]],
+      ]),
+    );
+    for (const edge of edges) {
+      const { points, length, blocked } = edge.data!.route;
+      const end = points.at(-1)!;
+      const previous = points.at(-2)!;
+      expect(blocked).toBe(false);
+      expect(previous.x).toBe(end.x);
+      expect(end.y - previous.y).toBeGreaterThanOrEqual(12);
+      expect(length).toBeCloseTo(
+        Math.abs(points[0].x - end.x) + Math.abs(points[0].y - end.y),
+      );
+    }
+  });
+
   it("很短的间距直接连接，不因固定端口偏移向后绕线", () => {
     const [edge] = routeCanvasEdges(
       [box("a", 0, 0), box("b", 138, 0)],

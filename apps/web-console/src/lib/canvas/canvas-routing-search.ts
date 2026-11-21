@@ -126,7 +126,6 @@ export function searchCanvasRoute(
   starts: CanvasPort[],
   ends: CanvasPort[],
   preferred: CanvasSegment[],
-  clearance: number,
 ) {
   if (!starts.length || !ends.length) return;
   const pointAt = (index: number): XYPosition => ({
@@ -140,6 +139,9 @@ export function searchCanvasRoute(
   const previous = new Int32Array(size).fill(-1);
   const roots = new Int32Array(size);
   const queue = new SearchQueue();
+  // 端口引线长度独立于场景避障间距，搜索代价需包含两端真实长度。
+  const portLength = ({ point, exit }: CanvasPort) =>
+    Math.abs(point.x - exit.x) + Math.abs(point.y - exit.y);
   const goals = new Map(ends.map((port) => [indexAt(port.exit), port]));
   const estimates = new Float64Array(grid.neighbours.length).fill(-1);
   const remainingAt = (index: number) => {
@@ -147,7 +149,10 @@ export function searchCanvasRoute(
       const point = pointAt(index);
       estimates[index] = Math.min(
         ...ends.map(
-          ({ exit }) => Math.abs(point.x - exit.x) + Math.abs(point.y - exit.y),
+          (port) =>
+            Math.abs(point.x - port.exit.x) +
+            Math.abs(point.y - port.exit.y) +
+            portLength(port),
         ),
       );
     }
@@ -156,7 +161,7 @@ export function searchCanvasRoute(
   starts.forEach((port, root) => {
     const entry = {
       state: indexAt(port.exit) * 2 + port.axis,
-      length: clearance,
+      length: portLength(port),
       bends: 0,
       unshared: 0,
       remaining: remainingAt(indexAt(port.exit)),
@@ -169,10 +174,7 @@ export function searchCanvasRoute(
   while (queue.entries.length) {
     const current = queue.pop();
     if (costs[current.state] !== current) continue;
-    if (
-      best &&
-      current.length + current.remaining + clearance > best.cost.length + 0.001
-    )
+    if (best && current.length + current.remaining > best.cost.length + 0.001)
       break;
     const index = Math.floor(current.state / 2),
       axis = current.state % 2;
@@ -180,7 +182,7 @@ export function searchCanvasRoute(
     if (goal) {
       const cost = {
         ...current,
-        length: current.length + clearance,
+        length: current.length + portLength(goal),
         bends: current.bends + Number(axis !== goal.axis),
       };
       if (!best || compare(cost, best.cost) < 0)

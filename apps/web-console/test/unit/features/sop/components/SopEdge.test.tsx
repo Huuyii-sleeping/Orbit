@@ -32,6 +32,9 @@ describe("SopEdge", () => {
       </svg>,
     );
     expect(markup).toContain('marker-end="url(#');
+    expect(markup).toMatch(
+      /<marker[^>]*>[\s\S]*?<path[^>]*d="M 1,1 L 7,4 L 1,7 Z"[^>]*fill="var\(--text-muted\)"[^>]*stroke="none"/,
+    );
     expect(markup).toContain("L 100,0");
     expect(markup).not.toContain("translate(190,80)");
   });

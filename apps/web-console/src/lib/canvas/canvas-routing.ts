@@ -50,6 +50,31 @@ function sceneClearance(nodes: CanvasRoutingNode[]) {
   return clearance;
 }
 
+/** 端口直线段只按正前方的障碍缩短，避免旁侧窄缝把箭头挤到转弯处。 */
+function portWithClearance(
+  node: CanvasRoutingNode,
+  side: Position,
+  nodes: CanvasRoutingNode[],
+  offset?: number,
+) {
+  const port = canvasPort(node, side, 12, offset);
+  let clearance = 12;
+  for (const other of nodes) {
+    if (other.id === node.id) continue;
+    const { x, y } = port.point;
+    let gap: number | undefined;
+    if (side === Position.Top || side === Position.Bottom) {
+      if (x < other.x || x > other.x + other.width) continue;
+      gap = side === Position.Top ? y - other.y - other.height : other.y - y;
+    } else {
+      if (y < other.y || y > other.y + other.height) continue;
+      gap = side === Position.Left ? x - other.x - other.width : other.x - x;
+    }
+    if (gap > 0) clearance = Math.min(clearance, gap / 3);
+  }
+  return canvasPort(node, side, clearance, offset);
+}
+
 /** 同源/同目标预留公共通道，只有距离和转弯数相同时才优先选它。 */
 function sharedChannels(nodes: Map<string, CanvasRoutingNode>, edges: Edge[]) {
   const channels: { segment: CanvasSegment; members: Set<string> }[] = [];
@@ -118,11 +143,11 @@ export function routeCanvasEdges(
         ? portSpecs
             .get(node.id)!
             .map((spec) => ({
-              ...canvasPort(node, spec.side, clearance, spec.offset),
+              ...portWithClearance(node, spec.side, nodes, spec.offset),
               id: spec.id,
               type: spec.type,
             }))
-        : canvasSides.map((side) => canvasPort(node, side, clearance)),
+        : canvasSides.map((side) => portWithClearance(node, side, nodes)),
     ]),
   );
   const grid = createCanvasRouteGrid(
@@ -169,7 +194,6 @@ export function routeCanvasEdges(
       available(edge.source, edge.sourceHandle, "source"),
       available(edge.target, edge.targetHandle, "target"),
       preferred,
-      clearance,
     );
     // 无可行路径时仍绘制真实端口位置，避免诊断边指向错误锚点。
     const from =
