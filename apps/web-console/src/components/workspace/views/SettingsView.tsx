@@ -89,7 +89,7 @@ export function SettingsView({
               ? "用于会话默认署名与本地档案，全部存储于本机。"
               : activeSection === "preferences"
                 ? "主题、语言与动效等本地偏好。"
-                : "运行时健康、BFF 连接与协议化审批状态。"}
+                : "查看运行连接和测试会话状态。"}
           </p>
 
           {activeSection === "profile" ? (
@@ -105,7 +105,7 @@ export function SettingsView({
                   </div>
                 </div>
                 <button type="button" className="btn btn-ghost btn-sm" onClick={onToggleProfileEdit}>
-                  {editingProfile ? "完成" : "更换头像"}
+                  {editingProfile ? "完成" : "编辑资料"}
                 </button>
               </div>
 

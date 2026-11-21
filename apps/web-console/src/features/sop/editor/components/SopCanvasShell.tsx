@@ -1,24 +1,9 @@
-import {
-  Background,
-  BackgroundVariant,
-  ConnectionLineType,
-  ConnectionMode,
-  Controls,
-  MiniMap,
-  ReactFlow,
-  type Edge,
-  type Node,
-} from "@xyflow/react";
+import { useReactFlow } from "@xyflow/react";
 import { useCallback, useEffect, useRef, useState } from "react";
-import type { WorkflowDraft, WorkflowRuntimeEvent } from "@orbit/workflow-core";
-import { SopConnectionLine, SopEdge } from "../../components/SopEdge";
-import { SopNodeView } from "../../components/SopNodeView";
-import { getSopNodeMeta } from "../../lib/sop-catalog";
+import type { WorkflowRuntimeEvent } from "@orbit/workflow-core";
 import { useSopEditor } from "../use-sop-editor";
 import { useSopWorkflowReferences } from "../use-sop-workflow-references";
 import { useSopAgentReferences } from "../use-sop-agent-references";
-import type { SopFlowData, SopFlowEdgeData } from "../sop-flow-adapter";
-import { SopAlignmentOverlay } from "./SopAlignmentOverlay";
 import { SopContainerScopeBar } from "./SopContainerScopeBar";
 import { SopInspector } from "./SopInspector";
 import { SopPalette } from "./SopPalette";
@@ -26,31 +11,58 @@ import { SopToolbar } from "./SopToolbar";
 import { SopRunPanel } from "../../runs/components/SopRunPanel";
 import { useSopRun } from "../../runs/use-sop-run";
 
-const nodeTypes = { sop: SopNodeView };
-const edgeTypes = { sop: SopEdge };
+import type { SopCanvasProps } from "../sop-editor-types";
+import { SopCanvasViewport } from "./SopCanvasViewport";
+import { SopCanvasDock } from "./SopCanvasDock";
+import { SopFloatingRail } from "./SopFloatingRail";
+import { SopLayersPanel } from "./SopLayersPanel";
 
 /** SOP 编辑器外壳，负责组合画布、工具栏、节点库和检查器。 */
-export function SopCanvasShell({ initial, legacyBackup, onSave, onAutoSave, onRecoveryChange, onBack, onOpenLifecycle }: {
-  initial: WorkflowDraft;
-  legacyBackup: string | null;
-  onSave: (draft: WorkflowDraft) => void | Promise<void>;
-  onAutoSave?: (draft: WorkflowDraft) => void | Promise<void>;
-  onRecoveryChange?: (draft: WorkflowDraft) => void;
-  onBack: () => void;
-  onOpenLifecycle: () => void;
-}) {
+export function SopCanvasShell({
+  initial,
+  legacyBackup,
+  onSave,
+  onAutoSave,
+  onRecoveryChange,
+  onBack,
+  onOpenLifecycle,
+  theme,
+  onThemeToggle,
+  saveState,
+  saveMessage,
+}: SopCanvasProps) {
   const editor = useSopEditor(initial);
-  const workflowReferences = useSopWorkflowReferences(editor.selectedNode?.data.node.kind === "builtin" && editor.selectedNode.data.node.type === "subworkflow");
-  const agentReferences = useSopAgentReferences(editor.selectedNode?.data.node.kind === "builtin" && editor.selectedNode.data.node.type === "agent");
-  const handleRunEvent = useCallback((event: WorkflowRuntimeEvent) => {
-    editor.applyRunEvent(event);
-    if (event.type === "node.status" && event.status === "failed") editor.focusNode(event.nodeId);
-  }, [editor.applyRunEvent, editor.focusNode]);
-  const run = useSopRun({ draft: editor.currentDraft, onEvent: handleRunEvent, onReset: editor.clearRunState });
-  const [interactionMode, setInteractionMode] = useState<"select" | "pan">("select");
-  const [openPanel, setOpenPanel] = useState<"palette" | "inspector" | null>(null);
-  const lastConnectionCheck = useRef<{ valid: boolean; reason?: string } | null>(null);
-  const canvasRef = useRef<HTMLDivElement | null>(null);
+  const workflowReferences = useSopWorkflowReferences(
+    editor.selectedNode?.data.node.kind === "builtin" &&
+      editor.selectedNode.data.node.type === "subworkflow",
+  );
+  const agentReferences = useSopAgentReferences(
+    editor.selectedNode?.data.node.kind === "builtin" &&
+      editor.selectedNode.data.node.type === "agent",
+  );
+  const handleRunEvent = useCallback(
+    (event: WorkflowRuntimeEvent) => {
+      editor.applyRunEvent(event);
+      if (event.type === "node.status" && event.status === "failed")
+        editor.focusNode(event.nodeId);
+    },
+    [editor.applyRunEvent, editor.focusNode],
+  );
+  const run = useSopRun({
+    draft: editor.currentDraft,
+    onEvent: handleRunEvent,
+    onReset: editor.clearRunState,
+  });
+  const [interactionMode, setInteractionMode] = useState<"select" | "pan">(
+    "select",
+  );
+  const [leftPanel, setLeftPanel] = useState<"layers" | "palette" | null>(null);
+  const [inspectorOpen, setInspectorOpen] = useState(false);
+  const [spaceHeld, setSpaceHeld] = useState(false);
+  const flow = useReactFlow();
+  const panMode = interactionMode === "pan" || spaceHeld;
+  const togglePalette = () =>
+    setLeftPanel((current) => (current === "palette" ? null : "palette"));
   const currentDraftRef = useRef(editor.currentDraft);
   const autoSaveRef = useRef(onAutoSave);
   const recoveryChangeRef = useRef(onRecoveryChange);
@@ -62,20 +74,41 @@ export function SopCanvasShell({ initial, legacyBackup, onSave, onAutoSave, onRe
     const onKeyDown = (event: KeyboardEvent) => {
       const target = event.target as HTMLElement | null;
       if (event.key === "Escape") {
-        setOpenPanel(null);
+        setLeftPanel(null);
+        setInspectorOpen(false);
         return;
       }
-      if (target?.matches("input, textarea, select, [contenteditable='true']")) return;
+      if (target?.closest("input, textarea, select, [contenteditable='true']"))
+        return;
+      if (event.code === "Space") {
+        event.preventDefault();
+        setSpaceHeld(true);
+      }
+      if (event.metaKey || event.ctrlKey || event.altKey) return;
+      if (event.shiftKey && event.code === "Digit1") {
+        event.preventDefault();
+        void flow.fitView({ padding: 0.2, duration: 200 });
+      }
       if (event.key.toLowerCase() === "h") setInteractionMode("pan");
       else if (event.key.toLowerCase() === "v") setInteractionMode("select");
     };
+    const release = (event: KeyboardEvent) => {
+      if (event.code === "Space") setSpaceHeld(false);
+    };
+    const blur = () => setSpaceHeld(false);
     window.addEventListener("keydown", onKeyDown);
-    return () => window.removeEventListener("keydown", onKeyDown);
-  }, []);
+    window.addEventListener("keyup", release);
+    window.addEventListener("blur", blur);
+    return () => {
+      window.removeEventListener("keydown", onKeyDown);
+      window.removeEventListener("keyup", release);
+      window.removeEventListener("blur", blur);
+    };
+  }, [flow]);
 
   useEffect(() => {
-    if (editor.showJsonPanel || editor.selectedNodeIds.size > 0 || editor.selectedEdgeIds.size > 0) setOpenPanel("inspector");
-  }, [editor.selectedEdgeIds.size, editor.selectedNodeIds.size, editor.showJsonPanel]);
+    if (editor.showJsonPanel) setInspectorOpen(true);
+  }, [editor.showJsonPanel]);
 
   useEffect(() => {
     if (editor.dirtyRevision === 0) return;
@@ -87,131 +120,114 @@ export function SopCanvasShell({ initial, legacyBackup, onSave, onAutoSave, onRe
     return () => window.clearTimeout(timer);
   }, [editor.dirtyRevision]);
 
-  useEffect(() => {
-    const canvas = canvasRef.current;
-    if (!canvas || typeof ResizeObserver === "undefined") return;
-    let previous: { width: number; height: number } | null = null;
-    let frame = 0;
-    const observer = new ResizeObserver(([entry]) => {
-      if (!entry) return;
-      const next = { width: entry.contentRect.width, height: entry.contentRect.height };
-      if (!previous) {
-        previous = next;
-        return;
-      }
-      const before = previous;
-      previous = next;
-      if (Math.abs(next.width - before.width) < 1 && Math.abs(next.height - before.height) < 1) return;
-      window.cancelAnimationFrame(frame);
-      frame = window.requestAnimationFrame(() => editor.resizeViewport(before, next));
-    });
-    observer.observe(canvas);
-    return () => {
-      observer.disconnect();
-      window.cancelAnimationFrame(frame);
-    };
-  }, [editor.resizeViewport]);
-
   return (
-    <div className={`sop-wrap ${openPanel ? "has-open-panel" : ""}`}>
-      {openPanel ? <button type="button" className="sop-panel-scrim" aria-label="关闭辅助面板" onClick={() => setOpenPanel(null)} /> : null}
+    <div className="sop-wrap sop-free-canvas">
       <SopToolbar
         name={editor.name}
         summary={editor.summary}
-        dirtyRevision={editor.dirtyRevision}
-        debugState={editor.debugState}
+        theme={theme}
+        onThemeToggle={onThemeToggle}
+        saveState={saveState}
+        saveMessage={saveMessage}
+        debugMessage={editor.debugState.message}
         legacyBackup={legacyBackup}
         onNameChange={editor.setName}
         onSummaryChange={editor.setSummary}
         onBack={onBack}
-        onValidate={editor.runValidation}
-        onSave={() => { void onSave(editor.currentDraft()); }}
+        onValidate={() => {
+          editor.runValidation();
+          setInspectorOpen(true);
+        }}
+        onSave={() => void onSave(editor.currentDraft())}
         onOpenLifecycle={onOpenLifecycle}
         onExportJson={editor.openJsonExport}
-        onImportText={(text) => { editor.setJsonText(text); editor.setJsonError(null); editor.setShowJsonPanel(true); }}
-        canUndo={editor.canUndo}
-        canRedo={editor.canRedo}
-        searchQuery={editor.searchQuery}
-        searchCount={editor.searchMatches.length}
-        onSearchChange={editor.setSearchQuery}
-        onFocusSearch={() => { const match = editor.searchMatches[0]; if (match) editor.focusNode(match.id); }}
-        onUndo={editor.undo}
-        onRedo={editor.redo}
-        interactionMode={interactionMode}
-        onInteractionModeChange={setInteractionMode}
+        onImportText={(text) => {
+          editor.setJsonText(text);
+          editor.setJsonError(null);
+          editor.setShowJsonPanel(true);
+        }}
         onLayout={editor.autoLayout}
-        onFitSelection={editor.fitSelection}
         onTogglePin={editor.toggleSelectedPinned}
         canTestNode={Boolean(editor.selectedNode)}
-        onTestNode={() => { void run.prepare("node-test"); }}
-        onRunDraft={() => { void run.prepare("draft"); }}
-        onRunProduction={() => { void run.prepare("production"); }}
-        paletteOpen={openPanel === "palette"}
-        inspectorOpen={openPanel === "inspector"}
-        onTogglePalette={() => setOpenPanel((current) => current === "palette" ? null : "palette")}
-        onToggleInspector={() => setOpenPanel((current) => current === "inspector" ? null : "inspector")}
+        onTestNode={() => void run.prepare("node-test")}
+        onRunDraft={() => void run.prepare("draft")}
+        onRunProduction={() => void run.prepare("production")}
       />
       <div className="sop-editor-body">
-        <SopPalette open={openPanel === "palette"} onAdd={editor.addNodeOfType} onClose={() => setOpenPanel(null)} />
+        <SopFloatingRail
+          leftPanel={leftPanel}
+          inspectorOpen={inspectorOpen}
+          runOpen={run.open}
+          onLayers={() =>
+            setLeftPanel((current) => (current === "layers" ? null : "layers"))
+          }
+          onPalette={togglePalette}
+          onInspector={() => setInspectorOpen((open) => !open)}
+          onRun={() => (run.open ? run.close() : run.show())}
+        />
+        <SopPalette
+          open={leftPanel === "palette"}
+          onAdd={(type) => {
+            const position = flow.screenToFlowPosition({
+              x: window.innerWidth / 2 - 100,
+              y: window.innerHeight / 2 - 50,
+            });
+            // 点击新增选择附近空位；拖入画布仍尊重用户指定的位置。
+            while (
+              editor.nodes.some(
+                (node) =>
+                  position.x <
+                    node.position.x + (node.measured?.width ?? 216) + 24 &&
+                  position.x + 240 > node.position.x &&
+                  position.y <
+                    node.position.y + (node.measured?.height ?? 100) + 24 &&
+                  position.y + 124 > node.position.y,
+              )
+            )
+              position.y += 140;
+            editor.addNodeOfType(type, position);
+            if (window.innerWidth < 760) setLeftPanel(null);
+          }}
+          onClose={() => setLeftPanel(null)}
+        />
+        {leftPanel === "layers" && (
+          <SopLayersPanel
+            nodes={editor.nodes}
+            selectedIds={editor.selectedNodeIds}
+            onSelect={(id) => { editor.focusNode(id); setInspectorOpen(true); }}
+            onClose={() => setLeftPanel(null)}
+          />
+        )}
         <div className="sop-workspace">
           <div className="sop-workspace-body">
             <div className="sop-main">
-              <SopContainerScopeBar crumbs={editor.scopeCrumbs} onNavigate={editor.navigateToScope} onExit={editor.exitContainer} />
-              <div ref={canvasRef} className={interactionMode === "pan" ? "sop-canvas is-pan-mode" : "sop-canvas"} onDragOver={editor.onDragOver} onDrop={editor.onDrop}>
-                <ReactFlow<Node<SopFlowData>, Edge<SopFlowEdgeData>>
-                nodes={editor.nodes}
-                edges={editor.edges}
-                nodeTypes={nodeTypes}
-                edgeTypes={edgeTypes}
-                onNodesChange={editor.onNodesChange}
-                onEdgesChange={editor.onEdgesChange}
-                onConnect={editor.onConnect}
-                isValidConnection={(connection) => {
-                  const result = editor.checkConnection(connection);
-                  lastConnectionCheck.current = result;
-                  return result.valid;
-                }}
-                onConnectStart={() => editor.setConnectionHint(null)}
-                onConnectEnd={() => {
-                  const result = lastConnectionCheck.current;
-                  if (result && !result.valid) editor.setConnectionHint(result.reason ?? "连线不兼容。");
-                }}
-                connectionMode={ConnectionMode.Loose}
-                onSelectionChange={({ nodes, edges }) => { editor.setSelectedNodeIds(new Set(nodes.map((node) => node.id))); editor.setSelectedEdgeIds(new Set(edges.map((edge) => edge.id))); }}
-                onPaneClick={() => { if (interactionMode === "select") { editor.setSelectedNodeIds(new Set()); editor.setSelectedEdgeIds(new Set()); } }}
-                onNodeDrag={editor.onNodeDrag}
-                onNodeDragStart={editor.onNodeDragStart}
-                onNodeDragStop={editor.onNodeDragStop}
-                onNodeDoubleClick={(_event, node) => {
-                  const workflowNode = node.data.node;
-                  if (workflowNode.kind === "builtin" && (workflowNode.type === "iteration" || workflowNode.type === "loop")) editor.enterContainer(node.id);
-                }}
-                multiSelectionKeyCode="Shift"
-                selectionOnDrag={interactionMode === "select"}
-                panOnDrag={interactionMode === "pan" ? true : [1, 2]}
-                nodesDraggable={interactionMode === "select"}
-                nodesConnectable={interactionMode === "select"}
-                elementsSelectable={interactionMode === "select"}
-                deleteKeyCode={null}
-                fitView
-                defaultEdgeOptions={{ type: "sop" }}
-                connectionRadius={40}
-                connectionLineType={ConnectionLineType.SmoothStep}
-                connectionLineComponent={SopConnectionLine}
-                connectionLineStyle={{ stroke: "#22c55e", strokeWidth: 2.2, strokeDasharray: "6 4" }}
-                proOptions={{ hideAttribution: true }}
-                onlyRenderVisibleElements
-              >
-                <Background variant={BackgroundVariant.Lines} gap={24} size={1} color="rgba(255,255,255,0.07)" />
-                <Controls showInteractive={false} />
-                <MiniMap pannable zoomable nodeColor={(node) => getSopNodeMeta((node.data as SopFlowData).node.type).color} maskColor="rgba(0,0,0,0.35)" />
-                <SopAlignmentOverlay guides={editor.alignLines} />
-                </ReactFlow>
-                {editor.connectionHint ? <div className="sop-connection-hint">{editor.connectionHint}</div> : null}
+              <SopContainerScopeBar
+                crumbs={editor.scopeCrumbs}
+                onNavigate={editor.navigateToScope}
+                onExit={editor.exitContainer}
+              />
+              <SopCanvasViewport
+                editor={editor}
+                panMode={panMode}
+                theme={theme}
+                onInspect={() => setInspectorOpen(true)}
+              />
+              <SopCanvasDock
+                mode={panMode ? "pan" : "select"}
+                onModeChange={setInteractionMode}
+                onAdd={togglePalette}
+                canUndo={editor.canUndo}
+                canRedo={editor.canRedo}
+                onUndo={editor.undo}
+                onRedo={editor.redo}
+                onFitSelection={editor.fitSelection}
+              />
+              <div className="sop-canvas-help">
+                空格平移 · 滚轮移动 · ⌘ / Ctrl 滚轮缩放 · Alt 取消吸附
               </div>
             </div>
             <SopInspector
-              open={openPanel === "inspector"}
+              open={inspectorOpen}
               showJson={editor.showJsonPanel}
               name={editor.name}
               jsonText={editor.jsonText}
@@ -227,7 +243,10 @@ export function SopCanvasShell({ initial, legacyBackup, onSave, onAutoSave, onRe
               validation={editor.validation}
               availableVariables={editor.availableVariables}
               selectedDiagnostics={editor.selectedDiagnostics}
-              onJsonTextChange={(text) => { editor.setJsonText(text); editor.setJsonError(null); }}
+              onJsonTextChange={(text) => {
+                editor.setJsonText(text);
+                editor.setJsonError(null);
+              }}
               onImportJson={editor.importJson}
               onCloseJson={() => editor.setShowJsonPanel(false)}
               onUpdateNode={editor.updateSelectedNode}
@@ -237,8 +256,11 @@ export function SopCanvasShell({ initial, legacyBackup, onSave, onAutoSave, onRe
               onClearValidation={editor.clearValidation}
               onFocusNode={editor.focusNode}
               onToggleCollapsed={editor.toggleSelectedCollapsed}
-              onEnterContainer={(nodeId) => { editor.enterContainer(nodeId); setOpenPanel(null); }}
-              onClose={() => setOpenPanel(null)}
+              onEnterContainer={(nodeId) => {
+                editor.enterContainer(nodeId);
+                setInspectorOpen(false);
+              }}
+              onClose={() => setInspectorOpen(false)}
             />
           </div>
           <SopRunPanel
@@ -252,13 +274,26 @@ export function SopCanvasShell({ initial, legacyBackup, onSave, onAutoSave, onRe
             versions={run.versions}
             message={run.message}
             decisionPending={run.decisionPending}
-            onStart={(input) => { void run.start(input); }}
-            onCancel={() => { void run.cancel(); }}
-            onResume={(decision) => { void run.resume(decision); }}
+            onStart={(input) => {
+              void run.start(input);
+            }}
+            onCancel={() => {
+              void run.cancel();
+            }}
+            onResume={(decision) => {
+              void run.resume(decision);
+            }}
             onClose={run.close}
           />
         </div>
       </div>
+      <footer className="sop-canvas-status">
+        <span>
+          {editor.nodes.length} 个节点 / {editor.edges.length} 条连线
+        </span>
+        <span>{editor.scopePath.length ? "容器子流程" : "主流程"}</span>
+        <span>V 选择 · H 平移</span>
+      </footer>
     </div>
   );
 }

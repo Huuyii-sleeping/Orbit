@@ -2,11 +2,7 @@ import type { SVGProps } from "react";
 
 type BrandMarkProps = SVGProps<SVGSVGElement> & { size?: number };
 
-/**
- * Orbit 产品标识：单色几何标。
- * 外环 = 本地运行边界；中心实心节点 = 协调器（Orchestrator）；三个环绕节点 = 被编排的智能体。
- * 通过 currentColor 继承容器颜色，契合黑白基调。
- */
+/** Orbit 单色轨道标识：偏轴 O 形环与一颗轨道点，继承主题文字颜色。 */
 export function BrandMark({ size = 20, ...props }: BrandMarkProps) {
   return (
     <svg
@@ -18,14 +14,8 @@ export function BrandMark({ size = 20, ...props }: BrandMarkProps) {
       aria-label="Orbit"
       {...props}
     >
-      <circle cx="12" cy="12" r="9" stroke="currentColor" strokeWidth="1.2" strokeOpacity="0.35" />
-      <line x1="12" y1="12" x2="12" y2="3" stroke="currentColor" strokeWidth="1" strokeOpacity="0.5" />
-      <line x1="12" y1="12" x2="19.8" y2="16.5" stroke="currentColor" strokeWidth="1" strokeOpacity="0.5" />
-      <line x1="12" y1="12" x2="4.2" y2="16.5" stroke="currentColor" strokeWidth="1" strokeOpacity="0.5" />
-      <circle cx="12" cy="3" r="2" fill="currentColor" />
-      <circle cx="19.8" cy="16.5" r="2" fill="currentColor" />
-      <circle cx="4.2" cy="16.5" r="2" fill="currentColor" />
-      <circle cx="12" cy="12" r="2.6" fill="currentColor" />
+      <ellipse cx="12" cy="12" rx="7" ry="9" transform="rotate(35 12 12)" stroke="currentColor" strokeWidth="2" />
+      <circle cx="18.5" cy="7" r="3" fill="currentColor" />
     </svg>
   );
 }

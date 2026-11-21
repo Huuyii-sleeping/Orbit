@@ -1,3 +1,4 @@
+import { getErrorMessage } from "../../../../lib/errors/error-factory";
 import { Plus, Trash2 } from "lucide-react";
 import { useEffect, useState } from "react";
 import type { NodeConfigInspectorProps } from "../types";
@@ -35,7 +36,7 @@ export function HumanApprovalInspector({ node, onChange, availableVariables }: N
           updateConfig({ ...node.config, decisionSchema: parsed as Record<string, unknown> });
           setSchemaError(null);
         } catch (error) {
-          setSchemaError(error instanceof Error ? error.message : String(error));
+          setSchemaError(getErrorMessage(error, { source: "input" }));
         }
       }} /></label>
       {schemaError ? <div className="sop-valid-item err">{schemaError}</div> : null}

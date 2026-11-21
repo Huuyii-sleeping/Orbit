@@ -1,3 +1,5 @@
+import { ErrorNotice } from "../../feedback/ErrorNotice";
+import { getErrorMessage } from "../../../lib/errors/error-factory";
 import { useCallback, useEffect, useRef, useState } from "react";
 import {
   ApiRequestError,
@@ -19,8 +21,9 @@ import { clearSopRecovery, readSopRecovery, writeSopRecovery } from "../../../fe
 import { createSopDraft, listSopDrafts, readLegacySopBackup } from "../../../features/sop/lib/sop-store";
 import type { SopDraft } from "../../../features/sop/lib/sop-types";
 import { SopLifecyclePanel } from "../../../features/sop/versions/components/SopLifecyclePanel";
+import type { SopSaveState } from "../../../features/sop/editor/sop-editor-types";
+import type { ThemeMode } from "../../../theme";
 
-type SaveState = "idle" | "saving" | "saved" | "error" | "conflict";
 type DraftConflict = { local: SopDraft; remote: SopDraft };
 type LifecycleState = "idle" | "loading" | "publishing" | "restoring" | "error";
 
@@ -32,13 +35,13 @@ function conflictFromError(error: unknown, local: SopDraft): DraftConflict | nul
 }
 
 /** SOP Builder 入口：BFF 是权威数据源，localStorage 仅保存迁移来源和未提交恢复副本。 */
-export function SopBuilderView({ active, query }: { active: boolean; query: string }) {
+export function SopBuilderView({ active, query, theme, onThemeToggle }: { active: boolean; query: string; theme: ThemeMode; onThemeToggle: () => void }) {
   const [drafts, setDrafts] = useState<SopDraft[]>([]);
   const [mode, setMode] = useState<"list" | "canvas">("list");
   const [editing, setEditing] = useState<SopDraft | null>(null);
   const [legacyBackup, setLegacyBackup] = useState<string | null>(null);
   const [loadState, setLoadState] = useState<"idle" | "loading" | "ready" | "error">("idle");
-  const [saveState, setSaveState] = useState<SaveState>("idle");
+  const [saveState, setSaveState] = useState<SopSaveState>("idle");
   const [message, setMessage] = useState("");
   const [conflict, setConflict] = useState<DraftConflict | null>(null);
   const [canvasGeneration, setCanvasGeneration] = useState(0);
@@ -82,7 +85,7 @@ export function SopBuilderView({ active, query }: { active: boolean; query: stri
       setLoadState("ready");
     } catch (error) {
       setLoadState("error");
-      setMessage(error instanceof Error ? error.message : String(error));
+      setMessage(getErrorMessage(error));
     }
   }, []);
 
@@ -94,7 +97,7 @@ export function SopBuilderView({ active, query }: { active: boolean; query: stri
       setLifecycleState("idle");
     } catch (error) {
       setLifecycleState("error");
-      setLifecycleMessage(error instanceof Error ? error.message : String(error));
+      setLifecycleMessage(getErrorMessage(error));
     }
   }, []);
 
@@ -117,7 +120,8 @@ export function SopBuilderView({ active, query }: { active: boolean; query: stri
       setCanvasGeneration((value) => value + 1);
       setMode("canvas");
     } catch (error) {
-      setMessage(error instanceof Error ? error.message : String(error));
+      setLoadState("error");
+      setMessage(getErrorMessage(error));
     }
   }
 
@@ -135,7 +139,8 @@ export function SopBuilderView({ active, query }: { active: boolean; query: stri
       setCanvasGeneration((value) => value + 1);
       setMode("canvas");
     } catch (error) {
-      setMessage(error instanceof Error ? error.message : String(error));
+      setLoadState("error");
+      setMessage(getErrorMessage(error));
     }
   }
 
@@ -167,7 +172,7 @@ export function SopBuilderView({ active, query }: { active: boolean; query: stri
             break;
           }
           setSaveState("error");
-          setMessage(error instanceof Error ? error.message : String(error));
+          setMessage(getErrorMessage(error));
           break;
         }
       }
@@ -198,11 +203,10 @@ export function SopBuilderView({ active, query }: { active: boolean; query: stri
       const saved = await saveSopDraftRemote(base.id, base.revision, draft);
       clearSopRecovery(window.localStorage, saved.id);
       updateDraftList(saved);
-      adoptEditing(null);
+      adoptEditing(saved);
       setSaveState("saved");
       setHasPendingChanges(false);
       setMessage("草稿已保存");
-      setMode("list");
     } catch (error) {
       const nextConflict = conflictFromError(error, draft);
       if (nextConflict) {
@@ -212,7 +216,7 @@ export function SopBuilderView({ active, query }: { active: boolean; query: stri
         return;
       }
       setSaveState("error");
-      setMessage(error instanceof Error ? error.message : String(error));
+      setMessage(getErrorMessage(error));
     }
   }
 
@@ -224,8 +228,10 @@ export function SopBuilderView({ active, query }: { active: boolean; query: stri
       clearSopRecovery(window.localStorage, id);
       setDrafts((current) => current.filter((item) => item.id !== id));
     } catch (error) {
-      setMessage(error instanceof Error ? error.message : String(error));
       await loadDrafts();
+      // 刷新列表后保留删除失败提示，避免被加载状态清空。
+      setLoadState("error");
+      setMessage(getErrorMessage(error));
     }
   }
 
@@ -262,7 +268,7 @@ export function SopBuilderView({ active, query }: { active: boolean; query: stri
       setHasPendingChanges(false);
       setMessage("本地修改已基于最新 revision 保存。 ");
     } catch (error) {
-      setMessage(error instanceof Error ? error.message : String(error));
+      setMessage(getErrorMessage(error));
     }
   }
 
@@ -279,7 +285,7 @@ export function SopBuilderView({ active, query }: { active: boolean; query: stri
       setMessage("已将本地修改另存为独立草稿。 ");
       setCanvasGeneration((value) => value + 1);
     } catch (error) {
-      setMessage(error instanceof Error ? error.message : String(error));
+      setMessage(getErrorMessage(error));
     }
   }
 
@@ -311,7 +317,7 @@ export function SopBuilderView({ active, query }: { active: boolean; query: stri
         return;
       }
       setLifecycleState("error");
-      setLifecycleMessage(error instanceof Error ? error.message : String(error));
+      setLifecycleMessage(getErrorMessage(error));
     }
   }
 
@@ -332,14 +338,14 @@ export function SopBuilderView({ active, query }: { active: boolean; query: stri
       setCanvasGeneration((value) => value + 1);
     } catch (error) {
       setLifecycleState("error");
-      setLifecycleMessage(error instanceof Error ? error.message : String(error));
+      setLifecycleMessage(getErrorMessage(error));
     }
   }
 
   if (mode === "canvas" && editing) {
     return (
       <section className={`view-pad builder-canvas ${active ? "" : "view-hide"}`} data-view="builder" data-mode="canvas">
-        {message || conflict ? (
+        {conflict ? (
           <div className={`sop-sync-banner ${saveState}`} role={saveState === "error" || saveState === "conflict" ? "alert" : "status"}>
             <span>{message || "草稿同步状态"}</span>
             {conflict ? (
@@ -354,6 +360,10 @@ export function SopBuilderView({ active, query }: { active: boolean; query: stri
         <SopCanvas
           key={`${editing.id}:${canvasGeneration}`}
           initial={editing}
+          theme={theme}
+          onThemeToggle={onThemeToggle}
+          saveState={saveState}
+          saveMessage={message}
           legacyBackup={legacyBackup}
           onSave={handleSave}
           onAutoSave={handleAutoSave}
@@ -383,7 +393,7 @@ export function SopBuilderView({ active, query }: { active: boolean; query: stri
   return (
     <section className={`view-pad ${active ? "" : "view-hide"}`} data-view="builder">
       {loadState === "loading" ? <div className="sop-list-status">正在加载服务端 SOP 草稿…</div> : null}
-      {message ? <div className={`sop-list-status ${loadState === "error" ? "error" : ""}`}>{message}</div> : null}
+      {message ? loadState === "error" ? <ErrorNotice message={message} onRetry={() => void loadDrafts()} /> : <div className="sop-list-status">{message}</div> : null}
       <SopList drafts={drafts} query={query} onEdit={(draft) => { void handleEdit(draft); }} onNew={() => { void handleNew(); }} onDelete={(id) => { void handleDelete(id); }} />
     </section>
   );

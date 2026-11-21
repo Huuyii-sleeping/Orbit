@@ -1,0 +1,290 @@
+/* 自由画布只消费工作台主题；不另建深浅配色。 */
+.compact-console .sop-wrap.sop-free-canvas {
+  --text-secondary: var(--text-soft);
+  --canvas-grid: var(--border-strong);
+  --canvas-minimap-mask: color-mix(
+    in srgb,
+    var(--panel-bg-strong) 76%,
+    transparent
+  );
+  position: fixed;
+  inset: 0;
+  z-index: 60;
+  overflow: hidden;
+  background: var(--panel-bg-strong);
+  color: var(--text-main);
+  font: 12px/1.5 var(--ff);
+}
+.compact-console .sop-free-canvas button,
+.compact-console .sop-free-canvas summary {
+  cursor: pointer;
+}
+.compact-console .sop-free-canvas .sop-float-icon {
+  width: 30px;
+  height: 30px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0;
+  flex-shrink: 0;
+  background: transparent;
+  color: var(--text-soft);
+  border: 0;
+  border-radius: 4px;
+  text-decoration: none;
+}
+.compact-console .sop-free-canvas .sop-float-icon:hover {
+  background: var(--surface-hover);
+  color: var(--text-main);
+}
+.compact-console .sop-free-canvas .sop-float-icon[aria-pressed="true"] {
+  background: var(--accent-soft);
+  color: var(--accent-strong);
+}
+.compact-console .sop-free-canvas .sop-document-bar {
+  min-height: 57px;
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  padding: 8px 16px;
+  border-bottom: 1px solid var(--border-subtle);
+  background: var(--panel-bg);
+  z-index: 45;
+}
+.sop-document-brand {
+  display: flex;
+  align-items: center;
+  padding-right: 13px;
+  border-right: 1px solid var(--border-subtle);
+}
+.sop-document-identity {
+  display: grid;
+  min-width: 0;
+  width: 230px;
+}
+.sop-document-identity small {
+  font-size: 9px;
+  color: var(--text-muted);
+}
+.sop-document-identity input {
+  width: 100%;
+  font-size: 12px;
+  font-weight: 500;
+  background: transparent;
+  color: var(--text-main);
+  border: 0;
+  padding: 1px 0;
+}
+.sop-document-save {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  font-size: 10px;
+  color: var(--text-muted);
+  white-space: nowrap;
+}
+.sop-document-save.error,
+.sop-document-save.conflict {
+  color: var(--danger);
+}
+.sop-document-spacer {
+  flex: 1;
+}
+.sop-document-menu {
+  position: relative;
+}
+.sop-document-menu summary {
+  list-style: none;
+}
+.sop-document-menu summary::-webkit-details-marker {
+  display: none;
+}
+.sop-menu-content {
+  position: absolute;
+  top: 40px;
+  right: 0;
+  width: 246px;
+  max-height: calc(100dvh - 105px);
+  overflow-y: auto;
+  background: var(--panel-bg);
+  border: 1px solid var(--border-strong);
+  border-radius: 7px;
+  padding: 7px;
+  box-shadow: var(--shadow-panel);
+}
+.sop-menu-content button,
+.sop-menu-upload {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  padding: 8px 9px;
+  text-align: left;
+  width: 100%;
+  border: 0;
+  border-radius: 4px;
+  background: transparent;
+  color: var(--text-soft);
+  font-size: 11px;
+  cursor: pointer;
+}
+.sop-menu-content button:hover,
+.sop-menu-upload:hover {
+  background: var(--surface-hover);
+}
+.sop-menu-content hr {
+  border: 0;
+  border-top: 1px solid var(--border-subtle);
+  margin: 5px 0;
+}
+.sop-menu-description {
+  display: grid;
+  gap: 7px;
+  padding: 8px;
+  color: var(--text-muted);
+  font-size: 10px;
+}
+.sop-menu-description textarea {
+  resize: vertical;
+  padding: 7px;
+  width: 100%;
+  border: 1px solid var(--border-strong);
+  border-radius: 4px;
+  background: var(--composer-bg);
+  color: var(--text-main);
+  font-size: 11px;
+}
+.sop-menu-upload input {
+  width: 0;
+  height: 0;
+  position: absolute;
+  opacity: 0;
+}
+.sop-menu-status {
+  padding: 6px 9px;
+  color: var(--accent);
+  font-size: 10px;
+}
+.compact-console .sop-free-canvas .sop-editor-body,
+.compact-console .sop-free-canvas .sop-workspace,
+.compact-console .sop-free-canvas .sop-workspace-body {
+  position: relative;
+  display: flex;
+  flex: 1;
+  min-width: 0;
+  min-height: 0;
+}
+.compact-console .sop-free-canvas .sop-main {
+  position: absolute;
+  inset: 0;
+  display: block;
+}
+.compact-console .sop-free-canvas .sop-canvas {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  background: var(--panel-bg-strong);
+}
+.compact-console .sop-free-canvas .sop-scope-bar {
+  position: absolute;
+  top: 13px;
+  left: 20px;
+  right: auto;
+  min-height: 27px;
+  padding: 0;
+  background: transparent;
+  border: 0;
+  box-shadow: none;
+  z-index: 5;
+  pointer-events: none;
+}
+.compact-console .sop-free-canvas .sop-scope-bar button {
+  pointer-events: auto;
+}
+.compact-console .sop-free-canvas .sop-scope-kicker,
+.compact-console .sop-free-canvas .sop-scope-identity {
+  display: none;
+}
+.compact-console .sop-free-canvas .sop-scope-back {
+  background: var(--panel-bg);
+  border-radius: 4px;
+}
+.compact-console .sop-free-canvas .sop-scope-back:disabled {
+  display: none;
+}
+.compact-console .sop-free-canvas .sop-scope-crumb button {
+  font-size: 10px;
+  font-weight: 400;
+  color: var(--text-soft);
+}
+.sop-floating-rail,
+.sop-canvas-dock {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  padding: 5px;
+  border: 1px solid var(--border-strong);
+  background: var(--panel-bg);
+  box-shadow: var(--shadow-panel);
+  border-radius: 8px;
+  z-index: 25;
+}
+.sop-floating-rail {
+  position: absolute;
+  left: 16px;
+  top: 60px;
+  flex-direction: column;
+}
+.sop-floating-rail i {
+  width: 20px;
+  height: 1px;
+  background: var(--border-subtle);
+  margin: 3px 0;
+}
+.sop-canvas-dock {
+  position: absolute;
+  bottom: 35px;
+  left: 50%;
+  transform: translateX(-50%);
+  gap: 3px;
+  max-width: calc(100% - 24px);
+}
+.sop-canvas-dock i {
+  height: 18px;
+  width: 1px;
+  background: var(--border-subtle);
+  margin: 0 3px;
+}
+.sop-zoom-value {
+  min-width: 44px;
+  height: 30px;
+  border: 0;
+  color: var(--text-soft);
+  background: transparent;
+  font-size: 10px;
+}
+.sop-canvas-help {
+  position: absolute;
+  bottom: 12px;
+  left: 50%;
+  transform: translateX(-50%);
+  color: var(--text-muted);
+  font-size: 9px;
+  white-space: nowrap;
+  pointer-events: none;
+}
+.sop-canvas-status {
+  height: 25px;
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  gap: 18px;
+  padding: 0 17px;
+  border-top: 1px solid var(--border-subtle);
+  background: var(--panel-bg);
+  color: var(--text-muted);
+  font-size: 9px;
+}
+.sop-canvas-status span:last-child {
+  margin-left: auto;
+}

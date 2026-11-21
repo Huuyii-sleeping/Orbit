@@ -1,0 +1,302 @@
+.compact-console .sop-free-canvas .sop-pal,
+.compact-console .sop-free-canvas .sop-insp,
+.sop-layers-panel {
+  position: absolute;
+  inset: 59px auto 100px 67px;
+  z-index: 26;
+  width: 268px;
+  max-width: calc(100% - 84px);
+  max-height: calc(100% - 145px);
+  overflow-y: auto;
+  padding: 14px;
+  border: 1px solid var(--border-strong);
+  border-radius: 7px;
+  background: var(--panel-bg);
+  box-shadow: var(--shadow-panel);
+  visibility: visible;
+  transform: none;
+  transition: none;
+}
+.compact-console .sop-free-canvas .sop-insp {
+  inset: 49px 16px 100px auto;
+  width: 300px;
+  padding: 17px;
+}
+.compact-console .sop-free-canvas .sop-panel-close {
+  display: inline-flex;
+  width: 25px;
+  height: 25px;
+  align-items: center;
+  justify-content: center;
+  border: 0;
+  background: transparent;
+  color: var(--text-muted);
+  border-radius: 3px;
+}
+.compact-console .sop-free-canvas .sop-panel-close:hover {
+  background: var(--surface-hover);
+}
+.compact-console .sop-free-canvas .sop-inspector-close {
+  position: absolute;
+  top: 11px;
+  right: 10px;
+  z-index: 2;
+}
+.compact-console .sop-free-canvas .sop-panel-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 9px;
+}
+.compact-console .sop-free-canvas .sop-pal-h,
+.compact-console .sop-free-canvas .sop-insp-h {
+  font-size: 12px;
+  font-weight: 500;
+  color: var(--text-main);
+}
+.compact-console .sop-free-canvas .sop-pal-hint {
+  font-size: 10px;
+  margin-bottom: 0;
+}
+.compact-console .sop-free-canvas .sop-pal-item {
+  width: 100%;
+  text-align: left;
+}
+.compact-console .sop-free-canvas .sop-pal-ic {
+  width: 28px;
+  height: 28px;
+  display: grid;
+  place-items: center;
+  border-radius: 5px;
+  background: var(--surface-hover);
+  color: var(--text-soft);
+  flex-shrink: 0;
+}
+.sop-palette-search input,
+.sop-layer-search input {
+  width: 100%;
+  min-width: 0;
+  font-size: 11px;
+  color: var(--text-main);
+  background: transparent;
+  border: 0;
+}
+.sop-palette-search {
+  display: block;
+  border: 1px solid var(--border-strong);
+  border-radius: 4px;
+  padding: 7px 8px;
+  margin-bottom: 10px;
+}
+.sop-layers-panel header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+.sop-layers-panel strong {
+  font-weight: 500;
+}
+.sop-layers-panel strong small {
+  color: var(--text-muted);
+  margin-left: 7px;
+  font-size: 10px;
+}
+.sop-layer-search {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  border-bottom: 1px solid var(--border-subtle);
+  padding: 10px 0;
+  color: var(--text-muted);
+}
+.sop-layer-items {
+  padding-top: 8px;
+}
+.sop-layer-items button {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  width: 100%;
+  min-height: 35px;
+  padding: 5px;
+  border: 0;
+  background: transparent;
+  color: var(--text-soft);
+  text-align: left;
+  border-radius: 4px;
+}
+.sop-layer-items button[aria-pressed="true"] {
+  background: var(--accent-soft);
+  color: var(--accent-strong);
+}
+.sop-layer-items button:hover {
+  background: var(--surface-hover);
+}
+.sop-layer-items button span {
+  flex: 1;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 11px;
+}
+.sop-layer-items small,
+.sop-layer-items p {
+  color: var(--text-muted);
+  font-size: 10px;
+}
+.compact-console .sop-free-canvas .sop-field > span,
+.compact-console .sop-free-canvas .sop-info-label {
+  font-size: 10px;
+  font-weight: 400;
+  color: var(--text-soft);
+}
+.compact-console
+  .sop-free-canvas
+  :is(
+    .sop-field input,
+    .sop-field textarea,
+    .sop-field select,
+    .sop-run-field input,
+    .sop-run-field textarea,
+    .sop-run-field select
+  ) {
+  background: var(--composer-bg);
+  color: var(--text-main);
+  border: 1px solid var(--border-strong);
+  border-radius: 4px;
+  font-size: 11px;
+  box-shadow: none;
+}
+.compact-console .sop-free-canvas .sop-info-val {
+  color: var(--text-soft) !important;
+  font-size: 11px;
+  font-weight: 400;
+}
+.compact-console .sop-free-canvas .sop-insp-h .dot {
+  background: var(--accent) !important;
+  width: 5px;
+  height: 5px;
+}
+.compact-console .sop-free-canvas .sop-valid-item.err,
+.compact-console .sop-free-canvas .sop-valid-err {
+  background: var(--danger-bg);
+  color: var(--danger);
+}
+.compact-console .sop-free-canvas .sop-valid-item.warn {
+  background: var(--warn-soft);
+  color: var(--warn);
+}
+.compact-console .sop-free-canvas .sop-valid-ok {
+  color: var(--accent);
+}
+.compact-console .sop-free-canvas .sop-run-panel {
+  position: absolute;
+  z-index: 35;
+  inset: auto 16px 16px 67px;
+  max-height: min(48%, 390px);
+  border: 1px solid var(--border-strong);
+  border-radius: 7px;
+  background: var(--panel-bg);
+  box-shadow: var(--shadow-panel);
+  flex-basis: auto;
+}
+.compact-console .sop-free-canvas .sop-run-head {
+  background: var(--panel-bg);
+  border-color: var(--border-subtle);
+}
+.compact-console
+  .sop-free-canvas
+  :is(.sop-run-live, .sop-run-section-title svg, .sop-run-node-input-title) {
+  color: var(--accent);
+  background: none;
+  box-shadow: none;
+}
+.compact-console
+  .sop-free-canvas
+  :is(.sop-run-start, .sop-run-cancel, .sop-run-close) {
+  background: var(--control-bg);
+  color: var(--control-ink);
+  border: 1px solid var(--border-strong);
+  border-radius: 4px;
+  box-shadow: none;
+}
+.compact-console .sop-free-canvas :is(.sop-run-message, .sop-run-error) {
+  color: var(--danger);
+  background: var(--danger-bg);
+}
+.compact-console .sop-free-canvas .sop-node-runtime {
+  color: var(--accent);
+  background: var(--accent-soft);
+  font-size: 9px;
+}
+.compact-console .sop-free-canvas .sop-node.run-failed {
+  border-color: var(--danger);
+}
+.compact-console .sop-free-canvas .sop-node.run-running {
+  border-color: var(--accent);
+  box-shadow: 0 0 0 1px var(--accent);
+}
+/* 发布和冲突属于文档级浮层，必须位于全屏画布之上。 */
+.compact-console .builder-canvas .sop-lifecycle-scrim {
+  position: fixed;
+  z-index: 80;
+  backdrop-filter: none;
+}
+.compact-console .builder-canvas .sop-lifecycle-panel {
+  position: fixed;
+  z-index: 81;
+  background: var(--panel-bg);
+  border-color: var(--border-strong);
+  box-shadow: var(--shadow-panel);
+}
+.compact-console .builder-canvas .sop-lifecycle-head h3 {
+  font-size: 16px;
+  font-weight: 500;
+}
+.compact-console .builder-canvas .sop-release-card {
+  border-color: var(--border-strong);
+  border-radius: 6px;
+  box-shadow: none;
+  background: var(--panel-bg);
+}
+.compact-console .builder-canvas .sop-release-submit {
+  background: var(--control-bg);
+  color: var(--control-ink);
+  border: 1px solid var(--border-strong);
+  border-radius: 4px;
+  font-weight: 500;
+}
+.compact-console
+  .builder-canvas
+  :is(.sop-release-title > span:first-child, .sop-version-section-head > div) {
+  font-weight: 500;
+}
+.compact-console .builder-canvas .sop-release-title .ready {
+  background: var(--accent-soft);
+  color: var(--accent-strong);
+}
+.compact-console .builder-canvas .sop-release-title .waiting {
+  background: var(--warn-soft);
+  color: var(--warn);
+}
+.compact-console
+  .builder-canvas
+  :is(.sop-lifecycle-eyebrow, .sop-lifecycle-message) {
+  color: var(--text-soft);
+}
+.compact-console .builder-canvas .sop-lifecycle-message.error {
+  color: var(--danger);
+}
+.compact-console .builder-canvas .sop-release-card textarea {
+  border-radius: 4px;
+}
+.compact-console .builder-canvas .sop-sync-banner {
+  position: fixed;
+  top: 65px;
+  left: 80px;
+  right: 20px;
+  z-index: 70;
+  background: var(--panel-bg);
+  color: var(--danger);
+  border: 1px solid var(--danger);
+}

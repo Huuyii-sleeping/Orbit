@@ -13,28 +13,6 @@ import {
 } from "lucide-react";
 import type { AgentProfile, SkillAuditEvent, SkillPackageInput, SkillRegistryItem } from "../../../api";
 
-/* ── Card personalization ─────────────────────────────────── */
-
-/** Accent palette for skill cards — stable per registrySource + id hash. */
-const SKILL_PALETTE = [
-  "#3b82f6", // blue
-  "#8b5cf6", // violet
-  "#f59e0b", // amber
-  "#ec4899", // pink
-  "#06b6d4", // cyan
-  "#84cc16", // lime
-  "#f43f5e", // rose
-];
-
-function skillAccent(skill: SkillRegistryItem): string {
-  const key = `${skill.registrySource}:${skill.id}`;
-  let hash = 0;
-  for (let i = 0; i < key.length; i++) {
-    hash = ((hash << 5) - hash + key.charCodeAt(i)) | 0;
-  }
-  return SKILL_PALETTE[Math.abs(hash) % SKILL_PALETTE.length];
-}
-
 /** Pick an icon based on skill category keywords. */
 function skillIcon(category: string): typeof Code2 {
   const c = category.toLowerCase();
@@ -198,7 +176,9 @@ export function SkillsView({
         <div className="hub-filter-pills">
           {items.map((item) => (
             <button
+              key={item.key}
               type="button"
+              aria-pressed={activeKey === item.key}
               className={`hub-pill ${activeKey === item.key ? "on" : ""}`}
               onClick={() => onSelect(item.key)}
             >
@@ -237,9 +217,8 @@ export function SkillsView({
   return (
     <section className={`view-pad ${active ? "" : "view-hide"}`} data-view="skills">
       <div className="section-head">
-        <span className="eyebrow">技能市场 · Skill Hub</span>
-        <h2 className="h2">发现、安装与管理社区技能</h2>
-        <p className="sub">基于全文检索安装技能，支持按来源筛选、私有发布与一键安装 / 升级 / 卸载。</p>
+        <h1 className="h2">技能 <span className="heading-count">{skills.length}</span></h1>
+        <p className="sub">查找技能，管理安装版本与使用权限。</p>
       </div>
 
       {/* ── Horizontal filter toolbar ─────────────────────── */}
@@ -297,7 +276,6 @@ export function SkillsView({
           ) : (
             filtered.map((skill) => {
               const action = skillActionLabel(skill);
-              const accent = skillAccent(skill);
               const IconComp = skillIcon(skill.category);
               const skillAgents = agents.filter((agent) => agent.skills.some((b) => b.skillId === skill.id));
               const skillAudits = auditEvents.filter((e) => e.skillId === skill.id).slice(0, 3);
@@ -310,11 +288,9 @@ export function SkillsView({
                   ref={open ? cardRef : undefined}
                   className={`skill ${open ? "open" : ""}`}
                 >
-                  {/* colored accent bar */}
-                  <div className="skill-accent" style={{ background: accent }} aria-hidden="true" />
 
                   <div className="skill-top">
-                    <span className="icon-box skill-icon" style={{ color: accent, borderColor: accent + "33", background: accent + "12" }} aria-hidden="true">
+                    <span className="icon-box skill-icon" aria-hidden="true">
                       <IconComp width={18} height={18} />
                     </span>
                     <div>
@@ -325,7 +301,7 @@ export function SkillsView({
                   </div>
 
                   <div className="skill-meta">
-                    <span className="chip" style={{ color: accent, borderColor: accent + "44", background: accent + "14" }}>{sourceLabel(skill.registrySource)}</span>
+                    <span className="chip">{sourceLabel(skill.registrySource)}</span>
                     <span className="chip">{skill.maturity}</span>
                     {skill.deprecated ? <span className="chip chip--warn">弃用</span> : null}
                   </div>

@@ -1,0 +1,93 @@
+/* 连续列表共用的节奏：工具栏、对象行、右侧说明。 */
+.compact-console .collection-toolbar { display: flex; align-items: center; gap: 10px; padding-bottom: 13px; margin-bottom: 21px; border-bottom: 1px solid var(--border-subtle); }
+.compact-console .collection-filters { display: flex; gap: 6px; flex-wrap: wrap; }
+.compact-console .collection-filters button { display: flex; align-items: center; gap: 8px; padding: 5px 9px; font-size: 11px; border-radius: 4px; color: var(--text-soft); }
+.compact-console .collection-filters button.on { color: var(--text-main); background: var(--surface-hover); font-weight: 550; }
+.compact-console .collection-filters button span { color: var(--text-muted); font: 10px var(--ff-mono); }
+.compact-console .collection-sort { margin-left: auto; }
+.compact-console .collection-sort select { border: 0; padding: 5px; color: var(--text-soft); background: var(--app-bg); font-size: 10px; }
+.compact-console .collection-layout { display: grid; grid-template-columns: minmax(0, 1fr) 200px; gap: 30px; }
+.compact-console .collection-main { min-width: 0; }
+.compact-console .agent-table-wrap { width: 100%; overflow-x: auto; }
+.compact-console .compact-agent-table { width: 100%; border-collapse: collapse; font-size: 11px; text-align: left; }
+.compact-console .compact-agent-table th { font-size: 10px; font-weight: 400; color: var(--text-muted); background: var(--panel-bg-strong); padding: 10px 13px; white-space: nowrap; }
+.compact-console .compact-agent-table td { height: 67px; padding: 8px 13px; border-bottom: 1px solid var(--border-subtle); color: var(--text-soft); white-space: nowrap; }
+.compact-console .compact-agent-table tbody tr:hover { background: var(--surface-hover); }
+.compact-console .compact-agent-table td:first-child { width: 43%; }
+.compact-console .agent-row-name { display: flex; gap: 11px; align-items: center; width: 100%; text-align: left; }
+.compact-console .agent-row-name strong { display: block; color: var(--text-main); font-size: 12px; font-weight: 550; }
+.compact-console .agent-row-name small { display: block; margin-top: 4px; color: var(--text-muted); font-size: 10px; max-width: 260px; text-overflow: ellipsis; white-space: nowrap; overflow: hidden; }
+.compact-console .row-icon { display: inline-flex; width: 29px; height: 29px; flex-shrink: 0; border: 1px solid var(--border-subtle); border-radius: 5px; align-items: center; justify-content: center; }
+.compact-console .row-icon svg { width: 15px; height: 15px; color: var(--text-muted); }
+.compact-console .row-state { display: inline-flex; align-items: center; gap: 6px; font-size: 10px; }
+.compact-console .row-state i { width: 4px; height: 4px; background: var(--text-muted); border-radius: 50%; }
+.compact-console .compact-agent-table time { font-size: 10px; }
+.compact-console .collection-footer { display: flex; justify-content: space-between; color: var(--text-muted); font-size: 10px; padding: 13px 0; }
+.compact-console .collection-aside { border-left: 1px solid var(--border-subtle); padding: 4px 0 0 23px; }
+.compact-console .collection-aside h2 { font-size: 10px; font-weight: 500; color: var(--text-muted); margin-bottom: 18px; }
+.compact-console .collection-aside dl { margin: 0 0 28px; }
+.compact-console .collection-aside dl > div { display: flex; align-items: center; justify-content: space-between; margin-bottom: 16px; font-size: 11px; }
+.compact-console .collection-aside dt { color: var(--text-soft); }
+.compact-console .collection-aside dd { margin: 0; font-family: var(--ff-mono); }
+.compact-console .collection-aside p { font-size: 10px; color: var(--text-muted); line-height: 1.9; }
+.compact-console .aside-note { border-top: 1px solid var(--border-subtle); border-bottom: 1px solid var(--border-subtle); padding: 22px 0; margin-bottom: 25px; }
+.compact-console .aside-note > svg { width: 18px; color: var(--text-muted); margin-bottom: 12px; }
+.compact-console .aside-note h3 { font-size: 11px; font-weight: 550; margin-bottom: 8px; }
+.compact-console .collection-empty { padding: 45px 15px; display: flex; align-items: center; flex-direction: column; gap: 12px; text-align: center; }
+.compact-console .collection-empty > svg { color: var(--text-muted); width: 25px; }
+.compact-console .collection-empty p, .compact-console .list-empty-note { font-size: 11px; line-height: 1.8; color: var(--text-muted); }
+.compact-console .recent-sessions { margin-top: 35px; }
+.compact-console .list-section-heading { display: flex; align-items: center; justify-content: space-between; padding-bottom: 14px; border-bottom: 1px solid var(--border-subtle); margin-bottom: 0; }
+.compact-console .list-section-heading h2 { font-size: 11px; font-weight: 550; }
+.compact-console .list-section-heading > span { font-size: 10px; color: var(--text-muted); }
+.compact-console .recent-session { display: flex; align-items: center; gap: 12px; padding: 15px 8px; border-bottom: 1px solid var(--border-subtle); }
+.compact-console .recent-session > svg { width: 14px; height: 14px; color: var(--text-muted); }
+.compact-console .recent-session > div { flex: 1; min-width: 0; }
+.compact-console .recent-session strong { display: block; font-size: 11px; font-weight: 500; }
+.compact-console .recent-session small { display: block; margin-top: 3px; font: 9px var(--ff-mono); color: var(--text-muted); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 250px; }
+.compact-console .recent-session > span, .compact-console .recent-session time { color: var(--text-muted); font-size: 10px; }
+.compact-console .list-empty-note { padding: 20px 0; }
+/* 技能和 SOP 使用同一连续列表结构，详情在当前行展开。 */
+.compact-console .hub { gap: 15px; }
+.compact-console .hub-toolbar { border: 0; border-radius: 0; border-bottom: 1px solid var(--border-subtle); background: none; padding: 0 0 17px; gap: 13px 18px; }
+.compact-console .hub-filter-group { flex-wrap: wrap; gap: 7px; }
+.compact-console .hub-filter-pills { flex-wrap: wrap; }
+.compact-console .hub-filter-label { font-size: 10px; font-weight: 400; }
+.compact-console .hub-pill { border: 0; border-radius: 4px; font-size: 11px; font-weight: 400; padding: 5px 8px; }
+.compact-console .hub-pill.on { color: var(--text-main); background: var(--surface-hover); }
+.compact-console .hub-pill.on .c { color: var(--text-muted); }
+.compact-console .skill-grid { display: flex; flex-direction: column; gap: 0; }
+.compact-console .skill { display: grid; grid-template-columns: minmax(220px, 1fr) minmax(100px, .65fr) minmax(180px, 1fr); align-items: center; gap: 12px 24px; border: 0; border-bottom: 1px solid var(--border-subtle); border-radius: 0; background: none; padding: 18px 8px; box-shadow: none; min-width: 0; }
+.compact-console .skill:hover { background: var(--surface-hover); transform: none; box-shadow: none; }
+.compact-console .skill-top { gap: 11px; margin: 0; min-width: 0; }
+.compact-console .skill-top > div { min-width: 0; }
+.compact-console .skill-top > span:last-child { margin-left: 4px !important; }
+.compact-console .skill-name { font-size: 12px; font-weight: 550; overflow-wrap: anywhere; }
+.compact-console .skill-ver { font-size: 10px; margin-top: 4px; }
+.compact-console .skill-icon { width: 29px; height: 29px; flex-shrink: 0; }
+.compact-console .skill-meta { margin: 0; gap: 6px; }
+.compact-console .skill-desc { grid-column: 1 / 3; grid-row: 2; font-size: 11px; line-height: 1.7; margin: 0; color: var(--text-muted); -webkit-line-clamp: 2; }
+.compact-console .skill-foot { display: flex; justify-content: flex-end; flex-wrap: wrap; grid-column: 3; grid-row: 1 / 3; margin: 0; padding: 0; border: 0; gap: 8px; }
+.compact-console .skill-foot > span { font-size: 10px; }
+.compact-console .skill-foot .sp { display: none; }
+.compact-console .skill-pop { display: block; position: static; grid-column: 1 / -1; background: var(--panel-bg-strong); border: 1px solid var(--border-subtle); border-radius: 4px; box-shadow: none; margin-top: 4px; padding: 18px; width: auto; }
+.compact-console .skill-empty { padding: 50px 20px; font-size: 12px; color: var(--text-muted); }
+.compact-console .hub-upload-panel { border-radius: 5px; background: var(--panel-bg-strong); }
+@media (max-width: 1200px) { .compact-console .collection-layout { grid-template-columns: minmax(0, 1fr); } .compact-console .collection-aside { display: none; } .compact-console .skill { grid-template-columns: minmax(200px, 1fr) auto; } .compact-console .skill-meta { grid-column: 1; } .compact-console .skill-foot { grid-column: 2; grid-row: 1 / 4; max-width: 260px; } .compact-console .skill-desc { grid-column: 1; grid-row: 3; } }
+@media (max-width: 760px) {
+  .compact-console .collection-toolbar { gap: 5px; flex-wrap: wrap; }
+  .compact-console .collection-filters { flex: 1 1 100%; gap: 3px; }
+  .compact-console .collection-filters button { font-size: 10px; padding-inline: 7px; }
+  .compact-console .compact-agent-table th, .compact-console .compact-agent-table td { padding-inline: 9px; }
+  .compact-console .compact-agent-table th:nth-child(2), .compact-console .compact-agent-table td:nth-child(2), .compact-console .compact-agent-table th:nth-child(4), .compact-console .compact-agent-table td:nth-child(4) { display: none; }
+  .compact-console .agent-row-name { gap: 8px; }
+  .compact-console .agent-row-name small { max-width: 140px; }
+  .compact-console .agent-row-name strong { font-size: 11px; }
+  .compact-console .recent-session time { display: none; }
+  .compact-console .recent-session small { max-width: 160px; }
+  .compact-console .skill { grid-template-columns: minmax(0, 1fr); gap: 12px; padding: 19px 3px; }
+  .compact-console .skill-top { flex-wrap: wrap; }
+  .compact-console .skill-meta, .compact-console .skill-desc, .compact-console .skill-foot { grid-column: 1; grid-row: auto; }
+  .compact-console .skill-foot { max-width: none; justify-content: flex-start; }
+  .compact-console .hub-upload-panel textarea { min-width: 0; width: 100%; }
+}

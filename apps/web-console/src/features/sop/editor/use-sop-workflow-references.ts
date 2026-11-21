@@ -1,3 +1,4 @@
+import { getErrorMessage } from "../../../lib/errors/error-factory";
 import { useCallback, useEffect, useState } from "react";
 import { fetchSopDrafts, fetchSopVersions } from "../../../api";
 import type { WorkflowReferenceCatalog, WorkflowVersionReferenceOption } from "../nodes/types";
@@ -24,7 +25,7 @@ export function useSopWorkflowReferences(active: boolean): WorkflowReferenceCata
       })
       .catch((error: unknown) => {
         setState("error");
-        setMessage(error instanceof Error ? error.message : String(error));
+        setMessage(getErrorMessage(error));
       });
   }, []);
   useEffect(() => {

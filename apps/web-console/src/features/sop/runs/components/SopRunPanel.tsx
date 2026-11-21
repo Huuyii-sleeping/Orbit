@@ -1,3 +1,4 @@
+import { getErrorMessage, UserInputError, createAppError } from "../../../../lib/errors/error-factory";
 import { useEffect, useMemo, useState } from "react";
 import { Ban, Braces, CircleStop, Clock3, FlaskConical, ListTree, Play, Radio, RotateCcw, X } from "lucide-react";
 import type {
@@ -41,13 +42,13 @@ function parseInput(raw: string, field: InputField): unknown {
   if (!raw.trim()) return field.defaultValue;
   if (field.dataType === "number") {
     const value = Number(raw);
-    if (!Number.isFinite(value)) throw new Error(`${field.name} 必须是数字。`);
+    if (!Number.isFinite(value)) throw new UserInputError(`${field.name} 必须是数字。`);
     return value;
   }
   if (field.dataType === "boolean") {
     if (raw === "true") return true;
     if (raw === "false") return false;
-    throw new Error(`${field.name} 必须是 true 或 false。`);
+    throw new UserInputError(`${field.name} 必须是 true 或 false。`);
   }
   if (field.dataType === "object" || field.dataType === "array") return JSON.parse(raw) as unknown;
   if (field.dataType === "any") {
@@ -60,7 +61,7 @@ function collectInputs(fields: InputField[], values: Record<string, string>): Re
   const result: Record<string, unknown> = {};
   for (const field of fields) {
     const value = parseInput(values[field.id] ?? "", field);
-    if (value === undefined && field.required) throw new Error(`${field.name} 是必填输入。`);
+    if (value === undefined && field.required) throw new UserInputError(`${field.name} 是必填输入。`);
     if (value !== undefined) result[field.id] = value;
   }
   return result;
@@ -139,8 +140,8 @@ export function SopRunPanel(props: {
   const start = () => {
     setLocalError("");
     try {
-      if (props.mode === "node-test" && !props.selectedNode) throw new Error("请先在画布中选择一个节点。");
-      if (props.mode === "production" && !versionId) throw new Error("请先选择一个已发布版本。");
+      if (props.mode === "node-test" && !props.selectedNode) throw new UserInputError("请先在画布中选择一个节点。");
+      if (props.mode === "production" && !versionId) throw new UserInputError("请先选择一个已发布版本。");
       props.onStart({
         inputs: collectInputs(workflowInputFields, inputs),
         nodeInputs: collectInputs(nodeInputFields, nodeInputs),
@@ -148,7 +149,7 @@ export function SopRunPanel(props: {
         versionId: props.mode === "production" ? versionId : undefined,
       });
     } catch (error) {
-      setLocalError(error instanceof Error ? error.message : String(error));
+      setLocalError(getErrorMessage(error, { source: "input" }));
     }
   };
 
@@ -211,7 +212,7 @@ export function SopRunPanel(props: {
               <div className="sop-run-trace-meta"><span>attempt {trace.attempt}</span><span>{trace.durationMs === undefined ? "耗时 —" : `${trace.durationMs} ms`}</span></div>
               <label>输入<pre>{json(trace.input)}</pre></label>
               <label>输出<pre>{json(trace.output)}</pre></label>
-              {trace.error ? <div className="sop-run-error"><Ban aria-hidden="true" /><div><strong>{trace.error.code}</strong><span>{trace.error.message}</span><code>node {trace.error.nodeId ?? trace.nodeId} · attempt {trace.error.attempt ?? trace.attempt}</code></div></div> : null}
+              {trace.error ? <div className="sop-run-error"><Ban aria-hidden="true" /><div><strong>{createAppError(trace.error).title}</strong><span>{getErrorMessage(trace.error)}</span><code>node {trace.error.nodeId ?? trace.nodeId} · attempt {trace.error.attempt ?? trace.attempt}</code></div></div> : null}
             </>
           )}
         </div>

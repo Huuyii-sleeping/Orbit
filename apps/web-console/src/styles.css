@@ -5225,7 +5225,7 @@ button.settings-row:hover {
   }
 
   .profile-row strong,
-  .nav-item span:last-child,
+  .app-shell .nav-item span:last-child,
   .history-header span,
   .session-copy {
     display: none;
@@ -5236,7 +5236,7 @@ button.settings-row:hover {
   }
 
   .profile-row,
-  .nav-item,
+  .app-shell .nav-item,
   .history-header,
   .session-item {
     justify-content: center;

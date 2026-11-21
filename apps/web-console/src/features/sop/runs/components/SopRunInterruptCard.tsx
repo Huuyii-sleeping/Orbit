@@ -1,3 +1,4 @@
+import { getErrorMessage, UserInputError, createAppError } from "../../../../lib/errors/error-factory";
 import { useEffect, useRef, useState } from "react";
 import { Check, Clock3, PauseCircle, XCircle } from "lucide-react";
 import {
@@ -23,7 +24,7 @@ function parseEnumValue(raw: string, fieldName: string): unknown {
   try {
     return JSON.parse(raw) as unknown;
   } catch {
-    throw new Error(`${fieldName} 的枚举值无效。`);
+    throw new UserInputError(`${fieldName} 的枚举值无效。`);
   }
 }
 
@@ -34,20 +35,20 @@ function parseDecisionValue(raw: string, fieldName: string, schema: WorkflowJson
   if (type === "number" || type === "integer") {
     const value = Number(raw);
     if (!Number.isFinite(value) || (type === "integer" && !Number.isInteger(value))) {
-      throw new Error(`${fieldName} 必须是${type === "integer" ? "整数" : "数字"}。`);
+      throw new UserInputError(`${fieldName} 必须是${type === "integer" ? "整数" : "数字"}。`);
     }
     return value;
   }
   if (type === "boolean") {
     if (raw === "true") return true;
     if (raw === "false") return false;
-    throw new Error(`${fieldName} 必须是 true 或 false。`);
+    throw new UserInputError(`${fieldName} 必须是 true 或 false。`);
   }
   if (type === "object" || type === "array") {
     try {
       return JSON.parse(raw) as unknown;
     } catch {
-      throw new Error(`${fieldName} 必须是合法的 JSON。`);
+      throw new UserInputError(`${fieldName} 必须是合法的 JSON。`);
     }
   }
   if (type === "null") return null;
@@ -64,13 +65,13 @@ export function collectInterruptDecisionData(
   for (const [fieldName, fieldSchema] of Object.entries(schema.properties ?? {})) {
     const value = parseDecisionValue(values[fieldName] ?? "", fieldName, fieldSchema);
     if (value === undefined) {
-      if (required.has(fieldName)) throw new Error(`${fieldName} 是必填决定字段。`);
+      if (required.has(fieldName)) throw new UserInputError(`${fieldName} 是必填决定字段。`);
       continue;
     }
     result[fieldName] = value;
   }
   const diagnostic = validateWorkflowJsonSchema(result, schema, "human-approval-decision")[0];
-  if (diagnostic) throw new Error(diagnostic.message);
+  if (diagnostic) throw new UserInputError(diagnostic.message);
   return result;
 }
 
@@ -130,7 +131,7 @@ function DecisionField(props: {
 }
 
 function newIdempotencyKey(interruptId: string): string {
-  if (!globalThis.crypto?.randomUUID) throw new Error("当前浏览器无法生成决定幂等标识。");
+  if (!globalThis.crypto?.randomUUID) throw createAppError("crypto.randomUUID unavailable", { code: "BROWSER_UNSUPPORTED" });
   return `${interruptId}:${globalThis.crypto.randomUUID()}`;
 }
 
@@ -165,7 +166,7 @@ export function SopRunInterruptCard(props: {
       }
       props.onResume({ interruptId: waiting.interruptId, action, data, idempotencyKey });
     } catch (reason) {
-      setError(reason instanceof Error ? reason.message : String(reason));
+      setError(getErrorMessage(reason, { source: "input" }));
     }
   };
 

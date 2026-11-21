@@ -1,3 +1,4 @@
+import { getErrorMessage } from "../../../lib/errors/error-factory";
 import { useCallback, useEffect, useRef, useState } from "react";
 import {
   isTerminalWorkflowRunStatus,
@@ -62,7 +63,7 @@ export function useSopRun(input: {
       setPhase("idle");
     } catch (error) {
       setPhase("error");
-      setMessage(error instanceof Error ? error.message : String(error));
+      setMessage(getErrorMessage(error));
     }
   }, [input, stopStream]);
 
@@ -104,13 +105,13 @@ export function useSopRun(input: {
           setPhase("terminal");
           setMessage("");
           void fetchWorkflowRun(started.id).then(setRun).catch((error: unknown) => {
-            setMessage(error instanceof Error ? error.message : String(error));
+            setMessage(getErrorMessage(error));
           });
         },
       });
     } catch (error) {
       setPhase("error");
-      setMessage(error instanceof Error ? error.message : String(error));
+      setMessage(getErrorMessage(error));
     }
   }, [input, mode, stopStream]);
 
@@ -120,7 +121,7 @@ export function useSopRun(input: {
       await cancelWorkflowRun(run.id);
       setMessage("取消请求已发送，正在等待执行器停止。");
     } catch (error) {
-      setMessage(error instanceof Error ? error.message : String(error));
+      setMessage(getErrorMessage(error));
     }
   }, [run]);
 
@@ -144,17 +145,16 @@ export function useSopRun(input: {
       setPhase(isTerminalWorkflowRunStatus(resumed.status) ? "terminal" : "running");
       setMessage("");
     } catch (error) {
-      setMessage(error instanceof Error ? error.message : String(error));
+      setMessage(getErrorMessage(error));
     } finally {
       setDecisionPending(false);
     }
   }, [run]);
 
   const close = useCallback(() => {
-    stopStream();
-    setDecisionPending(false);
+    // 浮动控制台关闭只隐藏面板；运行中的 SSE 继续更新画布和 Trace。
     setOpen(false);
-  }, [stopStream]);
+  }, []);
 
-  return { open, mode, phase, run, events, versions, message, decisionPending, prepare, start, cancel, resume, close };
+  return { open, mode, phase, run, events, versions, message, decisionPending, prepare, start, cancel, resume, close, show: () => setOpen(true) };
 }

@@ -210,7 +210,10 @@ describe("web-console api client", () => {
       ),
     );
 
-    await expect(fetchSessions()).rejects.toThrow("agent down");
+    await expect(fetchSessions()).rejects.toMatchObject({
+      message: "Agent 运行服务尚未连接，请启动服务后重试。",
+      cause: "agent down", code: "AGENT_UPSTREAM_UNAVAILABLE", status: 502,
+    });
   });
 
   it("调用 SOP 草稿、版本、导入导出和发布 API", async () => {

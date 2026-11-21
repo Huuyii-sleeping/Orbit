@@ -1,10 +1,29 @@
 import React from "react";
 import ReactDOM from "react-dom/client";
+import { AppErrorBoundary } from "./app/AppErrorBoundary";
 import { App } from "./app/App";
+import { lazy, Suspense } from "react";
 import "./styles.css";
+import "./styles/compact-console.css";
+import "./features/sop/styles/free-canvas.css";
+
+const DesignPreviewPage = lazy(() => import("./pages/DesignPreviewPage"));
+const WorkflowDesignPage = lazy(() => import("./pages/WorkflowDesignPage"));
 
 ReactDOM.createRoot(document.getElementById("root") as HTMLElement).render(
   <React.StrictMode>
-    <App />
+    <AppErrorBoundary>
+      {window.location.pathname === "/design/workflow" ? (
+        <Suspense fallback={<div role="status">正在加载画布预览…</div>}>
+          <WorkflowDesignPage />
+        </Suspense>
+      ) : window.location.pathname === "/design" ? (
+        <Suspense fallback={<div role="status">正在加载设计预览…</div>}>
+          <DesignPreviewPage />
+        </Suspense>
+      ) : (
+        <App />
+      )}
+    </AppErrorBoundary>
   </React.StrictMode>,
 );

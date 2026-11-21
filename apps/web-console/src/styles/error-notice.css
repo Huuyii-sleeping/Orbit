@@ -1,0 +1,104 @@
+/* 独立于历史 agent-error-banner / side-card 的尺寸和按钮规则。 */
+.error-notice {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  box-sizing: border-box;
+  width: 100%;
+  max-width: 1440px;
+  min-width: 0;
+  margin: 0 0 20px;
+  padding: 11px 12px;
+  border: 1px solid
+    color-mix(
+      in srgb,
+      var(--danger, #b04444) 18%,
+      var(--border-subtle, #eceef0)
+    );
+  border-radius: 5px;
+  background: color-mix(
+    in srgb,
+    var(--danger, #b04444) 4%,
+    var(--panel-bg, #fff)
+  );
+  color: var(--danger, #b04444);
+  font: 12px / 1.65 var(--ff, sans-serif);
+}
+.error-notice__icon {
+  width: 16px;
+  height: 16px;
+  flex: 0 0 16px;
+}
+.error-notice__content {
+  flex: 1;
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+.error-notice__content p {
+  margin: 0;
+}
+.error-notice__action {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex: 0 0 auto;
+  gap: 5px;
+  min-height: 28px;
+  padding: 3px 7px;
+  border: 0;
+  border-radius: 3px;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  font-size: 11px;
+  cursor: pointer;
+  white-space: nowrap;
+}
+.error-notice__action svg {
+  width: 13px;
+  height: 13px;
+}
+.error-notice__action:hover {
+  background: color-mix(in srgb, currentColor 9%, transparent);
+}
+.error-notice__action:focus-visible {
+  outline: 2px solid currentColor;
+  outline-offset: 2px;
+}
+.app-error-notice {
+  position: fixed;
+  top: 20px;
+  right: 20px;
+  z-index: 2000;
+  width: min(420px, calc(100vw - 40px));
+}
+.app-error-notice .error-notice {
+  margin: 0;
+}
+.app-error-fallback {
+  display: grid;
+  place-content: center;
+  min-height: 100vh;
+  padding: 24px;
+  background: var(--app-bg, #f7f8fa);
+}
+.app-error-fallback .error-notice {
+  max-width: 520px;
+}
+@media (max-width: 480px) {
+  .error-notice {
+    align-items: flex-start;
+    flex-wrap: wrap;
+    gap: 6px 8px;
+    padding: 10px;
+  }
+  .error-notice__icon {
+    margin-top: 2px;
+  }
+  .error-notice__content {
+    flex-basis: calc(100% - 24px);
+  }
+  .error-notice__action {
+    margin-left: 17px;
+  }
+}

@@ -1,3 +1,4 @@
+import { getErrorMessage } from "../../../lib/errors/error-factory";
 import { useCallback, useEffect, useState } from "react";
 import { fetchAgentVersions } from "../../../api";
 import type { AgentVersionReferenceCatalog } from "../nodes/types";
@@ -17,7 +18,7 @@ export function useSopAgentReferences(active: boolean): AgentVersionReferenceCat
       })
       .catch((error: unknown) => {
         setState("error");
-        setMessage(error instanceof Error ? error.message : String(error));
+        setMessage(getErrorMessage(error));
       });
   }, []);
   useEffect(() => {

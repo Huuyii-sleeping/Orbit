@@ -39,6 +39,7 @@ export function SopInspector(props: {
   onEnterContainer: (nodeId: string) => void;
   onClose: () => void;
 }) {
+  if (!props.open) return null;
   let content;
   if (props.showJson) content = <SopJsonPanel name={props.name} text={props.jsonText} error={props.jsonError} onTextChange={props.onJsonTextChange} onImport={props.onImportJson} onClose={props.onCloseJson} />;
   else if (props.selectedNodeIds.size > 1) content = <div className="sop-insp-in"><div className="sop-insp-h">批量操作</div><div className="sop-info-row"><span className="sop-info-label">已选节点</span><span className="sop-info-val">{props.selectedNodeIds.size} 个</span></div><SopSelectionActions onDuplicate={props.onDuplicate} onDelete={props.onDelete} /></div>;

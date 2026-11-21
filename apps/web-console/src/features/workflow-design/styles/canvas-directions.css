@@ -1,0 +1,355 @@
+/* B：面板悬浮于画布，保留四周连续的工作空间。 */
+.wc-editor[data-layout="float"] {
+  --wc-canvas: #f1f3f3;
+  --wc-grid: #d5dbd9;
+  --wc-blue: #4f7b6b;
+  --wc-blue-soft: #e9f0ed;
+}
+.workflow-lab[data-theme="dark"] .wc-editor[data-layout="float"] {
+  --wc-canvas: #1b1f1e;
+  --wc-grid: #343c39;
+  --wc-blue: #a4c5b5;
+  --wc-blue-soft: #2c3c34;
+}
+.wc-editor[data-layout="float"] .wc-editor-stage {
+  grid-template-columns: 0 minmax(0, 1fr) 0;
+}
+.wc-editor[data-layout="float"] .wc-document-bar {
+  border-bottom-color: transparent;
+}
+.wc-editor[data-layout="float"] .wc-outline {
+  position: absolute;
+  top: 51px;
+  left: 65px;
+  bottom: 76px;
+  width: 208px;
+  border: 1px solid var(--wc-border);
+  border-radius: 9px;
+  box-shadow: var(--wc-shadow);
+  z-index: 9;
+}
+.wc-editor[data-layout="float"] .wc-inspector {
+  position: absolute;
+  top: 50px;
+  bottom: 77px;
+  right: 15px;
+  width: 250px;
+  border: 1px solid var(--wc-border);
+  border-radius: 9px;
+  box-shadow: var(--wc-shadow);
+  z-index: 8;
+}
+.wc-editor[data-layout="float"] .wc-canvas-region {
+  overflow: visible;
+}
+.wc-editor[data-layout="float"] .wc-flow-host {
+  left: 66px;
+  right: 25px;
+}
+.wc-editor[data-layout="float"].has-inspector .wc-flow-host {
+  right: 280px;
+}
+.wc-editor[data-layout="float"].has-outline .wc-flow-host {
+  left: 285px;
+}
+.wc-editor[data-layout="float"] .wc-canvas-caption {
+  top: 16px;
+  left: 22px;
+}
+.wc-editor[data-layout="float"] .wc-canvas-tools {
+  bottom: 22px;
+  padding: 6px 9px;
+  border-radius: 12px;
+}
+.wc-editor[data-layout="float"] .wc-canvas-hint {
+  bottom: 4px;
+}
+.wc-editor[data-layout="float"] .wc-node {
+  border-radius: 12px;
+  box-shadow: 0 4px 12px #1b312a08;
+}
+.wc-editor[data-layout="float"] .wc-node-head {
+  position: absolute;
+  top: 13px;
+  left: 13px;
+  padding: 0;
+}
+.wc-editor[data-layout="float"] .wc-node-icon {
+  width: 28px;
+  height: 28px;
+  border-radius: 7px;
+}
+.wc-editor[data-layout="float"] .wc-node-kind,
+.wc-editor[data-layout="float"] .wc-node-more {
+  display: none;
+}
+.wc-editor[data-layout="float"] .wc-node-name {
+  padding: 14px 13px 0 50px;
+}
+.wc-editor[data-layout="float"] .wc-node-description {
+  margin: 9px 13px 14px;
+  padding-top: 4px;
+  font-size: 10px;
+}
+.wc-editor[data-layout="float"] .wc-node-detail {
+  background: var(--wc-soft-bg);
+  border-radius: 0 0 12px 12px;
+  padding-block: 9px;
+}
+.wc-editor[data-layout="float"] .wc-terminal {
+  border-radius: 40px;
+}
+.wc-editor[data-layout="float"] .wc-terminal .wc-node-head {
+  position: static;
+  padding: 12px 14px;
+}
+.wc-editor[data-layout="float"] .wc-terminal .wc-node-icon {
+  width: auto;
+  height: auto;
+}
+.wc-editor[data-layout="float"] .wc-terminal .wc-node-kind {
+  display: block;
+}
+.wc-floating-rail {
+  position: absolute;
+  z-index: 10;
+  top: 51px;
+  left: 13px;
+  padding: 5px;
+  border: 1px solid var(--wc-border);
+  border-radius: 10px;
+  display: grid;
+  gap: 5px;
+  background: var(--wc-bg);
+  box-shadow: var(--wc-shadow);
+}
+.wc-floating-rail > div {
+  height: 1px;
+  background: var(--wc-line);
+  margin: 0 3px;
+}
+.wc-floating-rail .wc-icon {
+  width: 30px;
+  height: 32px;
+  border-radius: 6px;
+}
+.workflow-lab .wc-minimap {
+  height: 72px;
+  width: 110px;
+  bottom: 78px;
+  left: 0;
+  right: auto;
+  border: 1px solid var(--wc-border);
+  border-radius: 6px;
+  background: var(--wc-bg);
+  opacity: 0.8;
+  margin: 0 8px;
+}
+.wc-editor[data-layout="float"] .wc-panel-controls {
+  top: 10px;
+  right: 16px;
+}
+.wc-editor[data-layout="float"] .wc-editor-status {
+  background: var(--wc-canvas);
+  border-top-color: transparent;
+}
+.wc-editor[data-layout="float"] .wc-run-panel {
+  margin: 0 14px 14px;
+  border: 1px solid var(--wc-border);
+  border-radius: 8px;
+  box-shadow: var(--wc-shadow);
+}
+/* C：紧凑端口节点与下方运行轨迹，强调配置和排查。 */
+.wc-editor[data-layout="console"] {
+  --wc-canvas: #f7f8fa;
+  --wc-grid: #d8dde5;
+  --wc-blue: #577696;
+  --wc-blue-soft: #edf1f6;
+}
+.workflow-lab[data-theme="dark"] .wc-editor[data-layout="console"] {
+  --wc-canvas: #1c1f24;
+  --wc-grid: #343c47;
+  --wc-blue: #9cb9d8;
+  --wc-blue-soft: #2d3947;
+}
+.wc-editor[data-layout="console"].has-outline {
+  --wc-left-width: 165px;
+}
+.wc-editor[data-layout="console"].has-inspector {
+  --wc-right-width: 270px;
+}
+.wc-editor[data-layout="console"] .wc-outline {
+  background: var(--wc-soft-bg);
+}
+.wc-editor[data-layout="console"] .wc-outline-bottom {
+  font-size: 9px;
+}
+.wc-editor[data-layout="console"] .wc-node {
+  border-radius: 4px;
+  box-shadow: 0 1px 2px #00000004;
+}
+.wc-editor[data-layout="console"] .wc-node-head {
+  padding: 8px 10px 0;
+  gap: 6px;
+}
+.wc-editor[data-layout="console"] .wc-node-icon {
+  background: none;
+  width: 18px;
+  height: 18px;
+}
+.wc-editor[data-layout="console"] .wc-node-kind {
+  font:
+    9px "SFMono-Regular",
+    Consolas,
+    monospace;
+}
+.wc-editor[data-layout="console"] .wc-node-name {
+  font-size: 12px;
+  padding: 6px 10px 0;
+}
+.wc-editor[data-layout="console"] .wc-node-description {
+  margin: 4px 10px 9px;
+  font-size: 9px;
+}
+.wc-editor[data-layout="console"] .wc-node-detail {
+  padding: 6px 10px;
+  font-size: 8px;
+}
+.wc-editor[data-layout="console"] .wc-node-port {
+  display: flex;
+  justify-content: space-between;
+  border-top: 1px solid var(--wc-line);
+  padding: 5px 10px;
+  font:
+    9px "SFMono-Regular",
+    Consolas,
+    monospace;
+  color: var(--wc-soft);
+}
+.wc-editor[data-layout="console"] .wc-node-port small {
+  font-size: 8px;
+  color: var(--wc-muted);
+}
+.wc-editor[data-layout="console"] .wc-terminal {
+  width: 100px;
+}
+.wc-editor[data-layout="console"] .wc-terminal .wc-node-head {
+  padding: 10px 12px;
+}
+.wc-editor[data-layout="console"] .wc-terminal .wc-node-kind {
+  font-family: inherit;
+}
+.wc-editor[data-layout="console"] .wc-terminal .wc-node-port {
+  font-size: 8px;
+}
+.wc-editor[data-layout="console"] .wc-terminal .wc-node-port small {
+  display: none;
+}
+.wc-editor[data-layout="console"] .react-flow__handle {
+  border-radius: 2px;
+}
+.wc-editor[data-layout="console"] .wc-canvas-tools {
+  bottom: auto;
+  top: 45px;
+  left: 14px;
+  transform: none;
+  padding: 3px;
+  border-radius: 4px;
+  box-shadow: none;
+}
+.wc-editor[data-layout="console"] .wc-canvas-tools .wc-icon {
+  width: 25px;
+  height: 25px;
+}
+.wc-editor[data-layout="console"] .wc-canvas-hint {
+  bottom: 12px;
+}
+.wc-editor[data-layout="console"] .wc-run-panel {
+  min-height: 178px;
+}
+.wc-editor[data-layout="console"] .wc-run-header {
+  background: var(--wc-soft-bg);
+}
+.wc-editor[data-layout="console"] .wc-run-steps {
+  gap: 0;
+  padding: 0 18px 16px;
+}
+.wc-editor[data-layout="console"] .wc-run-step {
+  border: 0;
+  border-radius: 0;
+  border-left: 1px solid var(--wc-border);
+  padding: 7px 14px;
+  min-width: 170px;
+}
+.wc-editor[data-layout="console"] .wc-run-step-number {
+  display: block;
+  color: var(--wc-muted);
+  grid-column: 1 / -1;
+  font:
+    9px "SFMono-Regular",
+    Consolas,
+    monospace;
+  margin-bottom: 9px;
+}
+.wc-editor[data-layout="console"] .wc-run-step-arrow {
+  display: none;
+}
+@media (max-width: 1100px) {
+  .wc-editor[data-layout="float"] .wc-inspector {
+    width: 230px;
+  }
+  .wc-editor[data-layout="float"].has-inspector .wc-flow-host {
+    right: 255px;
+  }
+  .wc-editor[data-layout="console"].has-inspector {
+    --wc-right-width: 230px;
+  }
+}
+@media (max-width: 760px) {
+  .wc-editor[data-layout="float"] .wc-floating-rail {
+    top: 49px;
+    left: 7px;
+  }
+  .wc-editor[data-layout="float"] .wc-inspector {
+    top: 49px;
+    bottom: 80px;
+    right: 7px;
+    width: 220px;
+  }
+  .wc-editor[data-layout="float"] .wc-outline {
+    top: 49px;
+    left: 50px;
+    bottom: 80px;
+    width: 210px;
+  }
+  .wc-editor[data-layout="float"] .wc-flow-host,
+  .wc-editor[data-layout="float"].has-outline .wc-flow-host,
+  .wc-editor[data-layout="float"].has-inspector .wc-flow-host {
+    left: 0;
+    right: 0;
+  }
+  .wc-editor[data-layout="float"] .wc-canvas-tools {
+    bottom: 29px;
+    padding: 4px;
+  }
+  .wc-editor[data-layout="float"] .wc-canvas-hint {
+    bottom: 9px;
+  }
+  .wc-editor[data-layout="float"] .wc-run-panel {
+    margin: 0 6px 6px;
+  }
+  .wc-editor[data-layout="console"].has-outline,
+  .wc-editor[data-layout="console"].has-inspector {
+    --wc-left-width: 0px;
+    --wc-right-width: 0px;
+  }
+  .wc-editor[data-layout="console"] .wc-canvas-tools {
+    top: auto;
+    bottom: 31px;
+    left: 50%;
+    transform: translateX(-50%);
+  }
+  .workflow-lab .wc-minimap {
+    display: none;
+  }
+}

@@ -1,4 +1,5 @@
 import type { Edge, Node } from "@xyflow/react";
+import type { CanvasPortSpec, CanvasRoute } from "../../../lib/canvas/canvas-routing";
 import {
   WORKFLOW_SCHEMA_VERSION,
   type WorkflowNodeRunStatus,
@@ -10,6 +11,7 @@ import {
 /** React Flow 节点承载的数据，仅保存 core 节点快照和展示诊断。 */
 export type SopFlowData = Record<string, unknown> & {
   node: WorkflowNode;
+  portLayout?: CanvasPortSpec[];
   issueCount?: number;
   collapsed?: boolean;
   runStatus?: WorkflowNodeRunStatus;
@@ -18,6 +20,7 @@ export type SopFlowData = Record<string, unknown> & {
 
 /** React Flow 边承载的修复状态。 */
 export type SopFlowEdgeData = Record<string, unknown> & {
+  route?: CanvasRoute;
   status: "valid" | "needs-repair";
   issue?: string;
   runtimeActive?: boolean;

@@ -1,0 +1,91 @@
+/* 原有领域面板的控件适配；画布结构和运行协议保留。 */
+.compact-console button, .compact-console input, .compact-console textarea, .compact-console select { font-family: var(--ff); }
+.compact-console button:focus-visible, .compact-console select:focus-visible, .compact-console input:focus-visible, .compact-console textarea:focus-visible { outline: 2px solid var(--ring); outline-offset: 3px; }
+.compact-console button:disabled { cursor: not-allowed; opacity: .5; }
+.compact-console .btn { height: 30px; font-size: 11px; font-weight: 500; border-radius: 4px; padding: 0 11px; gap: 6px; transition: background 120ms; white-space: nowrap; }
+.compact-console .btn svg { width: 13px; height: 13px; }
+.compact-console .btn-primary, :root[data-theme="light"] .compact-console .btn-primary { color: var(--control-ink); background: var(--control-bg); border: 1px solid var(--border-strong); }
+.compact-console .btn-primary:hover, :root[data-theme="light"] .compact-console .btn-primary:hover { color: var(--control-ink); background: var(--control-bg); filter: none; border-color: var(--text-muted); transform: none; box-shadow: none; }
+.compact-console .btn-ghost { background: var(--panel-bg); border: 1px solid var(--border-strong); color: var(--text-soft); }
+.compact-console .btn-ghost:hover { background: var(--surface-hover); border-color: var(--border-strong); transform: none; box-shadow: none; }
+.compact-console .btn-sm { height: 28px; font-size: 10px; padding: 0 9px; }
+.compact-console .tool-btn { width: 27px; height: 27px; border-radius: 4px; border: 1px solid var(--border-subtle); color: var(--text-muted); }
+.compact-console .tool-btn svg { width: 13px; height: 13px; }
+.compact-console .tool-btn:hover { background: var(--surface-hover); color: var(--text-main); }
+.compact-console .pill { height: 20px; padding: 0 6px; border: 0; border-radius: 3px; background: none; font: 10px var(--ff); }
+.compact-console .pill.green { color: var(--accent); background: var(--accent-soft); }
+.compact-console .pill.amber { color: var(--warn); background: var(--warn-soft); }
+.compact-console .pill.red { color: var(--danger); background: var(--danger-bg); }
+.compact-console .pill .d { width: 4px; height: 4px; }
+.compact-console .chip { font: 10px var(--ff); font-weight: 400; border-radius: 3px; height: 20px; padding: 0 6px; color: var(--text-soft); }
+.compact-console .icon-box { border-radius: 5px; background: var(--panel-bg-strong); color: var(--text-soft); border-color: var(--border-subtle); }
+.compact-console .eyebrow, .compact-console .side-h, .compact-console .detail-h { color: var(--text-muted); font-size: 10px; font-weight: 500; letter-spacing: 0; }
+.compact-console .field { margin-bottom: 20px; }
+.compact-console .field > label { font-size: 11px; color: var(--text-soft); font-weight: 500; }
+.compact-console .input { border-radius: 4px; background: var(--composer-bg); color: var(--text-main); border: 1px solid var(--border-strong); font-size: 12px; line-height: 1.7; }
+.compact-console .draft-sub { white-space: normal; line-height: 1.8; font-size: 10px; }
+.compact-console .ag-detail-head { padding: 0 0 20px; margin-bottom: 0; }
+.compact-console .ag-section { border: 0; border-bottom: 1px solid var(--border-subtle); border-radius: 0; padding: 23px 0 8px; margin: 0; background: none; max-width: 820px; }
+.compact-console .ag-s-h { margin-bottom: 24px; }
+.compact-console .ag-s-h .icon-box { background: var(--panel-bg-strong) !important; border-color: var(--border-subtle) !important; color: var(--text-soft) !important; }
+.compact-console .ag-actions { flex-wrap: wrap; padding-top: 22px; position: static; background: var(--app-bg); border: 0; gap: 8px; }
+.compact-console .check { width: 100%; border-radius: 4px; font-size: 11px; text-align: left; }
+.compact-console .check .nm { font-size: 11px; }
+.compact-console .check .ok { color: var(--accent); }
+.compact-console .check .warn { color: var(--warn); }
+.compact-console .color-swatch { width: 24px; height: 24px; border-radius: 4px; }
+.compact-console .color-swatch--auto { width: auto; font-size: 10px; }
+.compact-console .view-pad[data-view="chat"] { min-height: calc(100dvh - 118px); }
+.compact-console .chat { grid-template-columns: minmax(0, 1fr) 220px; gap: 32px; }
+.compact-console .thread { gap: 10px; }
+.compact-console .side-card { border-radius: 5px; border-color: var(--border-subtle); background: var(--panel-bg); padding: 16px; }
+.compact-console .chat > div:last-child { border-left: 1px solid var(--border-subtle); padding-left: 23px; }
+.compact-console .chat > div:last-child .side-card { border: 0; border-radius: 0; padding: 0 0 20px; margin: 0 0 20px; border-bottom: 1px solid var(--border-subtle); }
+.compact-console .kv { font-size: 11px; }
+.compact-console .kv .v, .compact-console .mini { font-size: 10px; overflow-wrap: anywhere; }
+.compact-console .msg { margin-bottom: 15px; }
+.compact-console .msg-av { border-radius: 4px; }
+.compact-console .msg-av.u, .compact-console .msg-av.sub { background: var(--surface-active); color: var(--text-main); }
+.compact-console .bubble { color: var(--text-main); font-size: 13px; line-height: 1.9; overflow-wrap: anywhere; }
+.compact-console .tool-b { overflow-wrap: anywhere; white-space: pre-wrap; }
+.compact-console .composer { width: 100%; padding: 24px 0 0; margin: auto 0 0; background: var(--app-bg); border: 0; border-radius: 0; box-shadow: none; }
+.compact-console .composer-box { border-radius: 6px; }
+.compact-console .composer textarea { font-size: 12px; }
+.compact-console .composer:focus-within { box-shadow: none; }
+.compact-console .composer-box:focus-within { outline: 2px solid var(--ring); outline-offset: 2px; }
+.compact-console .send { border-radius: 4px; background: var(--control-bg); color: var(--control-ink); }
+.compact-console .send:hover { background: var(--control-bg); box-shadow: none; }
+.compact-console .set { grid-template-columns: 155px minmax(0, 670px); gap: 38px; }
+.compact-console .set-rail .brand { display: none; }
+.compact-console .set-nav { border: 0; padding: 0; }
+.compact-console .set-nav button { border-radius: 4px; font-size: 12px; font-weight: 400; height: 33px; }
+.compact-console .set-nav button.on, .compact-console .seg button.on { color: var(--text-main); }
+.compact-console .set-card { border: 0; border-top: 1px solid var(--border-subtle); border-radius: 0; padding: 23px 0; background: none; }
+.compact-console .toggle { background: var(--surface-active); }
+.compact-console .toggle.on { background: var(--control-bg); }
+.compact-console .toggle i { background: var(--text-muted); }
+.compact-console .toggle.on i { background: var(--control-ink); }
+.compact-console .sop-studio, .compact-console .sop-topbar, .compact-console .sop-toolbar { background: var(--panel-bg); }
+.compact-console .sop-list-status { font-size: 11px; overflow-wrap: anywhere; }
+@media (max-width: 1000px) { .compact-console .chat { grid-template-columns: minmax(0, 1fr); } .compact-console .chat > div:last-child { display: none; } }
+@media (max-width: 760px) {
+  .compact-console .set { grid-template-columns: minmax(0, 1fr); gap: 24px; }
+  .compact-console .set-nav { flex-direction: row; flex-wrap: wrap; }
+  .compact-console .set-nav button { font-size: 11px; padding: 0 10px; gap: 6px; }
+  .compact-console .set-nav svg { width: 13px; }
+  .compact-console .set-panel .h2 { font-size: 21px; }
+  .compact-console .view-pad[data-view="chat"] { min-height: calc(100dvh - 116px); }
+  .compact-console .ag-actions .btn { max-width: 100%; }
+}
+@media (prefers-reduced-motion: reduce) { .compact-console *, .compact-console *::before, .compact-console *::after { animation: none !important; transition: none !important; scroll-behavior: auto !important; } }
+.compact-console .preflight-issue { display: block; margin-top: 5px; color: var(--danger); overflow-wrap: anywhere; }
+.compact-console .view-pad.builder-canvas { height: 100%; }
+.compact-console .sop-top { background: var(--panel-bg); box-shadow: none; backdrop-filter: none; border-radius: 0; }
+.compact-console .sop-top-actions, .compact-console .sop-tool-mode { box-shadow: none; border-radius: 4px; }
+.compact-console .sop-flow-identity, .compact-console .sop-editor-status { border-radius: 4px; box-shadow: none; }
+.compact-console .sop-pal-item { border: 0 !important; border-radius: 3px; background: transparent !important; padding: 9px 6px; margin: 0; box-shadow: none; }
+.compact-console .sop-pal-item:hover { background: var(--surface-hover) !important; transform: none; }
+.compact-console .sop-pal-nm { font-size: 11px; font-weight: 500; }
+.compact-console .sop-pal-ds { font-size: 10px; line-height: 1.6; }
+.compact-console .sop-node { border-radius: 5px; background: var(--panel-bg); box-shadow: none; }
+.compact-console .sop-node.on { box-shadow: 0 0 0 2px var(--ring); }

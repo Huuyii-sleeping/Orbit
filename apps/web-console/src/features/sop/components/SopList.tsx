@@ -4,16 +4,6 @@ import type { SopDraft, SopNodeType } from "../lib/sop-types";
 import { SOP_TYPE_META } from "../lib/sop-catalog";
 import { validateSop } from "../lib/sop-validate";
 
-const LIST_PALETTE = ["#22c55e", "#3b82f6", "#8b5cf6", "#06b6d4", "#f59e0b", "#ec4899"];
-
-function draftAccent(id: string): string {
-  let hash = 0;
-  for (let i = 0; i < id.length; i++) {
-    hash = ((hash << 5) - hash + id.charCodeAt(i)) | 0;
-  }
-  return LIST_PALETTE[Math.abs(hash) % LIST_PALETTE.length];
-}
-
 function timeLabel(value: number): string {
   if (!value) return "未知";
   return new Intl.DateTimeFormat("zh-CN", { month: "numeric", day: "numeric", hour: "2-digit", minute: "2-digit" }).format(new Date(value));
@@ -60,9 +50,8 @@ export function SopList({
   return (
     <>
       <div className="section-head">
-        <span className="eyebrow">SOP Builder · 流程编排</span>
-        <h2 className="h2">用有向无环图编排你的自动化流程</h2>
-        <p className="sub">拖拽节点构建 DAG，支持自动保存、不可变发布版本与历史恢复。</p>
+        <h1 className="h2">工作流 <span className="heading-count">{drafts.length}</span></h1>
+        <p className="sub">编排流程、测试节点，管理发布版本。</p>
       </div>
 
       <div className="hub">
@@ -73,6 +62,7 @@ export function SopList({
               {filterItems.map((item) => (
                 <button
                   key={item.key}
+                  aria-pressed={filter === item.key}
                   type="button"
                   className={`hub-pill ${filter === item.key ? "on" : ""}`}
                   onClick={() => setFilter(item.key)}
@@ -96,15 +86,12 @@ export function SopList({
             </div>
           ) : (
             filtered.map((draft) => {
-              const accent = draftAccent(draft.id);
               const validation = validateSop(draft);
               return (
                 <article key={draft.id} className="skill">
-                  <div className="skill-accent" style={{ background: accent }} aria-hidden="true" />
                   <div className="skill-top">
                     <span
                       className="icon-box skill-icon"
-                      style={{ color: accent, borderColor: `${accent}33`, background: `${accent}12` }}
                       aria-hidden="true"
                     >
                       <Workflow width={18} height={18} />
@@ -123,7 +110,7 @@ export function SopList({
                   </div>
 
                   <div className="skill-meta">
-                    <span className="chip" style={{ color: accent, borderColor: `${accent}44`, background: `${accent}14` }}>
+                    <span className="chip">
                       {SOP_TYPE_META.start.label} → {SOP_TYPE_META.end.label}
                     </span>
                     {nodeTypeCount(draft, "llm") > 0 ? <span className="chip">{nodeTypeCount(draft, "llm")} AI</span> : null}

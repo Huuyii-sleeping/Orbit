@@ -1,63 +1,19 @@
+import { useId, useMemo } from "react";
 import {
   BaseEdge,
   EdgeLabelRenderer,
   getSmoothStepPath,
+  useStoreApi,
   type ConnectionLineComponentProps,
+  type Edge,
   type EdgeProps,
+  type Node,
 } from "@xyflow/react";
-import { getSopArrowAngle } from "../lib/sop-edge-geometry";
+import { canvasPath } from "../../../lib/canvas/canvas-routing-geometry";
+import { routeSopEdges } from "../editor/sop-canvas-routing";
+import type { SopFlowData, SopFlowEdgeData } from "../editor/sop-flow-adapter";
 
-/**
- * 自定义边：使用 React Flow 路径计算，并在目标 Handle 中心手绘箭头。
- *
- * 为什么不用 <marker>：
- *   React Flow 的 BaseEdge 内部对 markerEnd 的挂载有系统性偏移，
- *   无论 refX 设何值都无法消除路径终点与 Handle 视觉圆心间的间距。
- *   手绘箭头可以直接把尖点画在 (targetX, targetY)，零偏差。
- */
-
-/**
- * 在 (cx, cy) 处绘制一个等腰三角形箭头。
- * 尖端位于该坐标，尾部朝向相反方向。
- *
- * 参数：
- *   cx/cy — 箭头尖端坐标（即 Handle 圆心）
- *   angle  — 指向角（度）
- *   len    — 箭头全长（px）
- *   width  — 箭头底边宽度的一半（px）
- *   fill   — 填充色
- */
-function ArrowHead({
-  cx,
-  cy,
-  angle,
-  len = 11,
-  halfWidth = 5.5,
-  fill,
-}: {
-  cx: number;
-  cy: number;
-  angle: number;
-  len?: number;
-  halfWidth?: number;
-  fill: string;
-}) {
-  /* 三角形顶点：尖端在原点朝右，底边在左侧 */
-  const d = `M ${-len},-${halfWidth} L 0,0 L ${len === 0 ? 0 : -len},${halfWidth} Z`;
-  return (
-    <path
-      d={d}
-      className="sop-edge-arrow"
-      fill={fill}
-      transform={`translate(${cx}, ${cy}) rotate(${angle})`}
-    />
-  );
-}
-
-/* ------------------------------------------------------------------ */
-/*  主组件                                                            */
-/* ------------------------------------------------------------------ */
-
+/** 使用共享路由绘制连线，运行与诊断状态统一映射为工作台主题色。 */
 export function SopEdge({
   id,
   sourceX,
@@ -66,120 +22,168 @@ export function SopEdge({
   targetY,
   sourcePosition,
   targetPosition,
-  sourceHandleId,
   label,
   selected,
   data,
-}: EdgeProps) {
-  const [path, labelX, labelY] = getSmoothStepPath({
+}: EdgeProps<Edge<SopFlowEdgeData>>) {
+  const route = data?.route;
+  const markerId = `sop-arrow-${useId().replaceAll(":", "")}`;
+  const fallback = getSmoothStepPath({
     sourceX,
     sourceY,
     targetX,
     targetY,
     sourcePosition,
     targetPosition,
-    borderRadius: 16,
+    offset: 8,
+    borderRadius: 5,
   });
-
-  const isFalse = sourceHandleId === "false";
-  const needsRepair = (data as { status?: string } | undefined)?.status === "needs-repair";
-  const runtimeActive = (data as { runtimeActive?: boolean } | undefined)?.runtimeActive === true;
-  const runtimeTraversed = (data as { runtimeTraversed?: boolean } | undefined)?.runtimeTraversed === true;
-  const runtimeExcluded = (data as { runtimeExcluded?: boolean } | undefined)?.runtimeExcluded === true;
-  const stroke = selected ? "#ffffff" : runtimeActive ? "#38bdf8" : runtimeTraversed ? "#22c55e" : needsRepair || isFalse ? "#f43f5e" : "#64748b";
-  const width = selected ? 2.4 : runtimeActive ? 2.8 : runtimeTraversed ? 2.1 : 1.6;
-  const glowColor = "#ffffff";
-
-  /* 箭头尖端精确落在 Handle 锚点 (targetX, targetY) */
-  const arrowAngle = getSopArrowAngle(targetPosition);
-
+  const path = route ? canvasPath(route.points) : fallback[0];
+  const segment = route ? Math.max(1, Math.floor(route.points.length / 2)) : 0;
+  const labelX = route
+    ? (route.points[segment - 1].x + route.points[segment].x) / 2
+    : fallback[1];
+  const labelY = route
+    ? (route.points[segment - 1].y + route.points[segment].y) / 2 - 10
+    : fallback[2];
+  const needsRepair = data?.status === "needs-repair" || route?.blocked;
+  const stroke = selected
+    ? "var(--text-main)"
+    : needsRepair
+      ? "var(--danger)"
+      : data?.runtimeActive || data?.runtimeTraversed
+        ? "var(--accent)"
+        : "var(--text-muted)";
   return (
     <>
-      {/* 选中柔光底层 */}
-      {selected && (
-        <path
-          d={path}
-          fill="none"
-          stroke={glowColor}
-          strokeWidth={7}
-          strokeOpacity={0.16}
-          style={{ filter: "blur(3px)" }}
-        />
-      )}
-      {/* 连线本体（无 markerEnd） */}
+      <defs>
+        <marker
+          id={markerId}
+          viewBox="0 0 8 8"
+          markerWidth={8}
+          markerHeight={8}
+          refX={7}
+          refY={4}
+          orient="auto"
+          markerUnits="userSpaceOnUse"
+        >
+          <path
+            d="M 1,1 L 7,4 L 1,7"
+            fill="none"
+            stroke={stroke}
+            strokeWidth={1.3}
+            strokeLinecap="round"
+            strokeLinejoin="round"
+          />
+        </marker>
+      </defs>
       <BaseEdge
         id={id}
         path={path}
+        interactionWidth={18}
+        markerEnd={`url(#${markerId})`}
         style={{
           stroke,
-          strokeWidth: width,
-          transition: "stroke 120ms ease, stroke-width 120ms ease",
+          strokeWidth: selected || data?.runtimeActive ? 1.8 : 1.2,
+          strokeLinecap: "round",
+          strokeLinejoin: "round",
           strokeDasharray: needsRepair ? "5 4" : undefined,
-          filter: runtimeActive ? "drop-shadow(0 0 5px rgba(56, 189, 248, 0.72))" : undefined,
-          opacity: runtimeExcluded ? 0.28 : 1,
+          opacity: data?.runtimeExcluded ? 0.3 : selected ? 1 : 0.8,
         }}
       />
-      {/* 手绘箭头：尖端 = targetX/Y = Handle 圆心 */}
-      <ArrowHead
-        cx={targetX}
-        cy={targetY}
-        angle={arrowAngle}
-        fill={stroke}
-      />
-      {typeof label === "string" && label.trim() ? (
+      {(label || route?.blocked) && (
         <EdgeLabelRenderer>
           <div
             className="sop-edge-label nodrag nopan"
             style={{
-              transform: `translate(-50%, -50%) translate(${labelX}px, ${labelY}px)`,
+              transform: `translate(-50%, -50%) translate(${labelX}px,${labelY}px)`,
             }}
           >
-            {label}
+            {route?.blocked ? "端口被遮挡" : label}
           </div>
         </EdgeLabelRenderer>
-      ) : null}
+      )}
     </>
   );
 }
 
-/** 拖拽连线时的预览边，与最终边复用相同路径和箭头方向。 */
+/** 拉线时根据真实类型化端口计算避障预览，与落点后的路径一致。 */
 export function SopConnectionLine({
+  fromNode,
+  toNode,
+  fromHandle,
+  toHandle,
   fromX,
   fromY,
   toX,
   toY,
   fromPosition,
   toPosition,
-  connectionLineStyle,
   connectionStatus,
-}: ConnectionLineComponentProps) {
-  const [path] = getSmoothStepPath({
-    sourceX: fromX,
-    sourceY: fromY,
-    targetX: toX,
-    targetY: toY,
-    sourcePosition: fromPosition,
-    targetPosition: toPosition,
-    borderRadius: 16,
-  });
-  const stroke = connectionStatus === "invalid" ? "#f43f5e" : "#22c55e";
-
+}: ConnectionLineComponentProps<Node<SopFlowData>>) {
+  const store = useStoreApi<Node<SopFlowData>, Edge<SopFlowEdgeData>>();
+  const path = useMemo(() => {
+    if (!toNode || !toHandle)
+      return getSmoothStepPath({
+        sourceX: fromX,
+        sourceY: fromY,
+        targetX: toX,
+        targetY: toY,
+        sourcePosition: fromPosition,
+        targetPosition: toPosition,
+        offset: 8,
+        borderRadius: 5,
+      })[0];
+    const source = fromHandle.type === "source" ? fromNode : toNode;
+    const target = fromHandle.type === "source" ? toNode : fromNode;
+    const sourceHandle =
+      fromHandle.type === "source" ? fromHandle.id : toHandle.id;
+    const targetHandle =
+      fromHandle.type === "source" ? toHandle.id : fromHandle.id;
+    const nodes = store.getState().nodes;
+    const [edge] = routeSopEdges(
+      nodes,
+      [
+        {
+          id: "connection-preview",
+          source: source.id,
+          target: target.id,
+          sourceHandle,
+          targetHandle,
+          data: { status: "valid" },
+        },
+      ],
+      new Map(
+        nodes
+          .filter((node) => node.data.portLayout)
+          .map((node) => [node.id, node.data.portLayout!]),
+      ),
+    );
+    return canvasPath(edge.data!.route!.points);
+  }, [
+    store,
+    fromNode,
+    toNode,
+    fromHandle,
+    toHandle,
+    fromX,
+    fromY,
+    toX,
+    toY,
+    fromPosition,
+    toPosition,
+  ]);
   return (
-    <>
-      <path
-        className="sop-connection-line"
-        d={path}
-        fill="none"
-        style={{ ...connectionLineStyle, stroke }}
-      />
-      <ArrowHead
-        cx={toX}
-        cy={toY}
-        angle={getSopArrowAngle(toPosition)}
-        fill={stroke}
-        len={10}
-        halfWidth={5}
-      />
-    </>
+    <path
+      className="sop-connection-line"
+      d={path}
+      fill="none"
+      style={{
+        stroke:
+          connectionStatus === "invalid" ? "var(--danger)" : "var(--accent)",
+        strokeWidth: 1.5,
+        strokeDasharray: connectionStatus === "valid" ? undefined : "5 4",
+      }}
+    />
   );
 }

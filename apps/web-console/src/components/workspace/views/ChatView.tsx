@@ -1,5 +1,6 @@
+import { ErrorNotice } from "../../feedback/ErrorNotice";
 import type { FormEvent, KeyboardEvent, RefObject } from "react";
-import { Paperclip, RefreshCw, SendHorizontal, SlidersHorizontal } from "lucide-react";
+import { SendHorizontal } from "lucide-react";
 import type { AgentProfile, ChatMessage, HealthStatus, SessionDetail } from "../../../api";
 import { streamLabel } from "../../../features/chat/lib/chat-format";
 
@@ -56,14 +57,7 @@ export function ChatView({
 
   return (
     <section className={`view-pad ${active ? "" : "view-hide"}`} data-view="chat">
-      {error ? (
-        <div className="side-card" style={{ borderColor: "var(--danger-bg)", background: "var(--danger-bg)", marginBottom: 16 }}>
-          <div style={{ fontSize: 13, color: "var(--danger)" }}>请求失败：{error}</div>
-          <button type="button" className="btn btn-ghost btn-sm" style={{ marginTop: 10 }} onClick={onBootstrap}>
-            <RefreshCw aria-hidden="true" /> 重试
-          </button>
-        </div>
-      ) : null}
+      {error ? <ErrorNotice message={error} onRetry={onBootstrap} /> : null}
 
       <div className="chat">
         <div className="thread">
@@ -153,7 +147,7 @@ export function ChatView({
             </div>
             <div className="kv">
               <span className="k">模型</span>
-              <span className="v">{activeSession?.model ?? "claude-sonnet"}</span>
+              <span className="v">{"由运行时配置"}</span>
             </div>
             <div className="kv">
               <span className="k">运行时</span>
@@ -188,11 +182,11 @@ export function ChatView({
             <div className="mini-list">
               <div className="mini">
                 <span className="d" />
-                {boundSkills.length} 项技能可加载
+                {boundSkills.length} 项绑定技能
               </div>
               <div className="mini">
                 <span className="d" />
-                工具调用权限已授予
+                工具权限以实际运行结果为准
               </div>
               <div
                 className="mini"
@@ -221,12 +215,6 @@ export function ChatView({
             rows={1}
           />
           <div className="composer-row">
-            <button type="button" className="tool-btn" title="附件" aria-label="附件">
-              <Paperclip aria-hidden="true" />
-            </button>
-            <button type="button" className="tool-btn" title="工具" aria-label="工具">
-              <SlidersHorizontal aria-hidden="true" />
-            </button>
             <div className="sp" />
             <button type="submit" className="send" disabled={!canSend} title="发送" aria-label="发送">
               <SendHorizontal aria-hidden="true" />

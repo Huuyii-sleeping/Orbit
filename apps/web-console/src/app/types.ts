@@ -1,28 +1,8 @@
-import type { SettingsSection } from "../settings-route";
-import type { SessionMetadataMap } from "../session-metadata";
-import type { LucideIcon } from "lucide-react";
-
+/** 聊天请求状态。 */
 export type LoadState = "idle" | "loading" | "sending";
+
+/** 运行时事件连接状态。 */
 export type StreamState = "connecting" | "connected" | "disconnected";
+
+/** 工作台可切换页面。 */
 export type AppView = "agent" | "skills" | "builder" | "chat" | "settings";
-export type WorkspaceTab = Exclude<AppView, "settings">;
-
-export type NavItem = {
-  label: string;
-  icon: LucideIcon;
-};
-
-export type QuickAction = {
-  label: string;
-  icon: LucideIcon;
-};
-
-export type SidebarSetting = {
-  label: string;
-  icon: LucideIcon;
-  section: SettingsSection;
-};
-
-export type SessionSummaryTitleMap = Record<string, string>;
-
-export type SessionMetadataUpdater = (current: SessionMetadataMap) => SessionMetadataMap;

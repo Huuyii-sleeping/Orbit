@@ -1,3 +1,4 @@
+import { getErrorMessage } from "../../../../lib/errors/error-factory";
 import { useEffect, useState } from "react";
 import type { AvailableVariable, ValueOrVariable, WorkflowDataType } from "@orbit/workflow-core";
 import { VariableSelector } from "./VariableSelector";
@@ -24,7 +25,7 @@ export function TypedValueOrVariableInput<T = unknown>({ label, value, dataType,
       onChange({ kind: "literal", value: parseWorkflowLiteral(next, dataType) as T });
       setError(null);
     } catch (cause) {
-      setError(cause instanceof Error ? cause.message : String(cause));
+      setError(getErrorMessage(cause, { source: "input" }));
     }
   };
   return (

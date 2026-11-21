@@ -1,0 +1,59 @@
+@import "./free-canvas-layout.css";
+@import "./free-canvas-panels.css";
+@import "./free-canvas-nodes.css";
+
+@media (max-width: 760px) {
+  .compact-console .sop-free-canvas .sop-document-bar {
+    padding: 7px 8px;
+    gap: 5px;
+  }
+  .sop-document-brand,
+  .sop-document-save,
+  .sop-document-publish,
+  .sop-run-draft-label {
+    display: none;
+  }
+  .sop-document-identity {
+    width: auto;
+    flex: 1;
+  }
+  .sop-document-save-button {
+    padding: 0 8px !important;
+  }
+  .sop-canvas-dock {
+    gap: 1px;
+    padding: 4px;
+  }
+  .sop-canvas-dock .sop-float-icon {
+    width: 26px !important;
+  }
+  .sop-canvas-dock i {
+    margin: 0 1px;
+  }
+  .sop-canvas-dock [aria-label="定位选中"] {
+    display: none;
+  }
+  .sop-canvas-help {
+    max-width: 90%;
+    font-size: 8px;
+  }
+  .compact-console .sop-free-canvas .sop-insp {
+    width: min(300px, calc(100% - 84px));
+    right: 10px;
+  }
+  .compact-console .sop-free-canvas .sop-run-panel {
+    inset: auto 10px 12px 10px;
+    max-height: 60%;
+  }
+  .compact-console .sop-free-canvas .sop-run-grid {
+    display: block;
+  }
+  .compact-console .sop-free-canvas .react-flow__minimap {
+    display: none;
+  }
+  .sop-document-menu .sop-menu-content {
+    position: fixed;
+    top: 59px;
+    right: 8px;
+  }
+}

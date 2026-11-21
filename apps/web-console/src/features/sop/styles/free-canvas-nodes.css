@@ -1,0 +1,186 @@
+.compact-console .sop-free-canvas .sop-node {
+  width: 216px;
+  min-height: 87px;
+  border: 1px solid var(--border-strong);
+  border-radius: 7px;
+  padding: 12px 15px;
+  background: var(--panel-bg);
+  box-shadow: 0 2px 5px color-mix(in srgb, var(--text-main) 3%, transparent);
+}
+.compact-console .sop-free-canvas .sop-node.on {
+  border-color: var(--accent);
+  box-shadow: 0 0 0 1px var(--accent);
+}
+.compact-console .sop-free-canvas .sop-node-h {
+  font-size: 10px;
+  font-weight: 400;
+  color: var(--text-muted);
+  gap: 7px;
+}
+.compact-console .sop-free-canvas .sop-node-h svg {
+  width: 23px;
+  height: 23px;
+  padding: 4px;
+  background: var(--surface-hover);
+  border-radius: 4px;
+}
+.compact-console .sop-free-canvas .sop-node-label {
+  font-size: 12px;
+  font-weight: 500;
+  color: var(--text-main);
+  margin-top: 8px;
+  padding-right: 12px;
+}
+.compact-console .sop-free-canvas .sop-node-tag {
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  background: var(--surface-hover);
+  color: var(--text-soft);
+  font-size: 10px;
+  border-radius: 3px;
+  padding: 2px 5px;
+}
+.compact-console .sop-free-canvas .sop-node-note {
+  color: var(--text-muted);
+  font-size: 10px;
+  line-height: 1.6;
+}
+.compact-console .sop-free-canvas .sop-node-issue {
+  background: var(--danger);
+  color: var(--panel-bg);
+  box-shadow: none;
+}
+/* 端口几何只有一个中心；透明命中区不改变路由或箭头的边界坐标。 */
+.compact-console .sop-free-canvas .sop-h {
+  width: 1px;
+  height: 1px;
+  min-width: 1px;
+  min-height: 1px;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+  right: auto;
+  bottom: auto;
+  transform: translate(-50%, -50%);
+  opacity: 0;
+  transition: opacity 100ms ease;
+}
+.compact-console .sop-free-canvas .sop-h::before {
+  content: "";
+  position: absolute;
+  width: 22px;
+  height: 22px;
+  left: 50%;
+  top: 50%;
+  transform: translate(-50%, -50%);
+  border-radius: 50%;
+}
+.compact-console .sop-free-canvas .sop-h::after {
+  content: "";
+  position: absolute;
+  width: 6px;
+  height: 6px;
+  left: 50%;
+  top: 50%;
+  transform: translate(-50%, -50%);
+  border: 1px solid var(--panel-bg);
+  border-radius: 50%;
+  background: var(--text-muted);
+  pointer-events: none;
+}
+.compact-console .sop-free-canvas .react-flow__node:hover .sop-h,
+.compact-console .sop-free-canvas .react-flow__node.selected .sop-h,
+.compact-console .sop-free-canvas:has(.react-flow__connection) .sop-h {
+  opacity: 1;
+}
+.compact-console .sop-free-canvas .sop-h:hover,
+.compact-console .sop-free-canvas .sop-h.connectingfrom,
+.compact-console .sop-free-canvas .sop-h.connectingto {
+  border: 0 !important;
+  background: transparent !important;
+  box-shadow: none !important;
+}
+.compact-console .sop-free-canvas .sop-h:hover::after,
+.compact-console .sop-free-canvas .sop-h.connectingto.valid::after {
+  background: var(--accent);
+  box-shadow: 0 0 0 4px var(--accent-soft);
+}
+.compact-console .sop-free-canvas .sop-h.connectingto.invalid::after {
+  background: var(--danger);
+}
+.sop-port-label {
+  position: absolute;
+  pointer-events: none;
+  opacity: 0;
+  font-size: 9px;
+  color: var(--text-muted);
+  white-space: nowrap;
+}
+.sop-node:hover .sop-port-label,
+.sop-node.on .sop-port-label {
+  opacity: 1;
+}
+.sop-port-label--top {
+  transform: translate(-50%, 8px);
+}
+.sop-port-label--bottom {
+  transform: translate(-50%, calc(-100% - 7px));
+}
+.sop-port-label--left {
+  transform: translate(8px, -50%);
+}
+.sop-port-label--right {
+  transform: translate(calc(-100% - 8px), -50%);
+}
+.compact-console
+  .sop-free-canvas
+  .react-flow__edge.selected
+  .react-flow__edge-path {
+  stroke: var(--text-main);
+}
+.compact-console .sop-free-canvas .sop-edge-label {
+  background: var(--panel-bg-strong);
+  color: var(--text-soft);
+  border: 0;
+  border-radius: 3px;
+  box-shadow: none;
+  padding: 1px 4px;
+  font-size: 9px;
+  font-weight: 400;
+}
+.compact-console .sop-free-canvas .sop-connection-line {
+  animation: none;
+}
+.compact-console .sop-free-canvas .sop-connection-hint {
+  bottom: 88px;
+  color: var(--danger);
+  border: 1px solid var(--danger);
+  background: var(--panel-bg);
+  box-shadow: none;
+}
+.compact-console .sop-free-canvas .sop-align-line {
+  stroke: var(--accent);
+  filter: none;
+  stroke-width: 1;
+  stroke-dasharray: 4 3;
+}
+.compact-console .sop-free-canvas .sop-align-lock {
+  fill: var(--panel-bg);
+  stroke: var(--accent);
+  stroke-width: 1;
+  filter: none;
+}
+.compact-console .sop-free-canvas .react-flow__selection {
+  background: var(--accent-soft);
+  border-color: var(--accent);
+}
+.compact-console .sop-free-canvas .react-flow__minimap {
+  left: 16px;
+  right: auto;
+  bottom: 17px;
+  background: var(--panel-bg);
+  border-color: var(--border-strong);
+  border-radius: 5px;
+}

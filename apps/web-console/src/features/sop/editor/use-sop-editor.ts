@@ -1,7 +1,8 @@
+import { getErrorMessage } from "../../../lib/errors/error-factory";
 import { useCallback, useEffect, useMemo, useState, type DragEvent } from "react";
-import { addEdge, applyEdgeChanges, applyNodeChanges, useReactFlow, type Connection, type Edge, type Node, type OnEdgesChange, type OnNodeDrag, type OnNodesChange } from "@xyflow/react";
+import { addEdge, applyEdgeChanges, reconnectEdge, useReactFlow, type Connection, type Edge, type Node, type OnEdgesChange, type OnNodeDrag, type OnNodesChange } from "@xyflow/react";
 import { WORKFLOW_SCHEMA_VERSION, builtinNodeRegistry, getAvailableVariables, migrateSopDraftV1, refreshNodePorts, type AvailableVariable, type BuiltinNodeType, type WorkflowDraft, type WorkflowNode, type WorkflowRuntimeEvent } from "@orbit/workflow-core";
-import { getSopAlignmentSnap, type SopAlignmentGuide, type SopNodeBox, type SopNodeSize } from "../lib/sop-alignment";
+import { useCanvasSnapping } from "../../../components/canvas/use-canvas-snapping";
 import { validateSop, type SopValidation } from "../lib/sop-validate";
 import { parseWorkflowDraftJson, toFlowGraphEdges, toFlowGraphNodes, toWorkflowGraph, type SopFlowData, type SopFlowEdgeData } from "./sop-flow-adapter";
 import { cloneSelectedGraph } from "./sop-selection";
@@ -83,7 +84,9 @@ export function useSopEditor(initial: WorkflowDraft) {
   const [selectedNodeIds, setSelectedNodeIdsState] = useState<Set<string>>(new Set());
   const [selectedEdgeIds, setSelectedEdgeIdsState] = useState<Set<string>>(new Set());
   const [validation, setValidation] = useState<SopValidation | null>(null);
-  const [alignLines, setAlignLines] = useState<SopAlignmentGuide[]>([]);
+  const snapping = useCanvasSnapping(nodes, setNodes);
+  const alignLines = snapping.guides;
+  const setAlignLines = snapping.setGuides;
   const [showJsonPanel, setShowJsonPanel] = useState(false);
   const [jsonText, setJsonText] = useState("");
   const [jsonError, setJsonError] = useState<string | null>(null);
@@ -183,9 +186,9 @@ export function useSopEditor(initial: WorkflowDraft) {
   }, [navigateToScope, scopePath]);
 
   const onNodesChange: OnNodesChange<Node<SopFlowData>> = useCallback((changes) => {
-    setNodes((current) => applyNodeChanges(changes, current));
+    snapping.onNodesChange(changes);
     if (changes.some((change) => change.type !== "select" && change.type !== "dimensions" && change.type !== "position")) markDirty();
-  }, [markDirty]);
+  }, [markDirty, snapping.onNodesChange]);
   const onEdgesChange: OnEdgesChange<Edge<SopFlowEdgeData>> = useCallback((changes) => {
     setEdges((current) => applyEdgeChanges(changes, current));
     if (changes.some((change) => change.type !== "select")) markDirty();
@@ -201,6 +204,15 @@ export function useSopEditor(initial: WorkflowDraft) {
     markDirty();
   }, [checkConnection, markDirty, recordHistory]);
 
+  const onReconnect = useCallback((edge: Edge<SopFlowEdgeData>, connection: Connection) => {
+    const result = checkConnection(connection);
+    if (!result.valid) return setConnectionHint(result.reason);
+    recordHistory();
+    setEdges((current) => reconnectEdge(edge, connection, current, { shouldReplaceId: false }));
+    setConnectionHint(null);
+    markDirty();
+  }, [checkConnection, markDirty, recordHistory]);
+
   const addNodeOfType = useCallback(<T extends BuiltinNodeType>(type: T, position?: { x: number; y: number }) => {
     const definition = builtinNodeRegistry.get(type)!;
     const config = definition.createDefaultConfig();
@@ -212,27 +224,11 @@ export function useSopEditor(initial: WorkflowDraft) {
   const onDragOver = useCallback((event: DragEvent) => { event.preventDefault(); event.dataTransfer.dropEffect = "move"; }, []);
   const onDrop = useCallback((event: DragEvent) => { event.preventDefault(); const type = event.dataTransfer.getData("application/sop-node"); if (builtinNodeRegistry.has(type)) addNodeOfType(type, flow.screenToFlowPosition({ x: event.clientX, y: event.clientY })); }, [addNodeOfType, flow]);
 
-  const snapNode = useCallback((node: Node<SopFlowData>) => {
-    const viewport = flow.getViewport();
-    const size: SopNodeSize = { w: node.measured?.width ?? 168, h: node.measured?.height ?? 80 };
-    const others: SopNodeBox[] = nodes.filter((item) => item.id !== node.id).map((item) => ({ id: item.id, position: item.position, size: { w: item.measured?.width ?? 168, h: item.measured?.height ?? 80 } }));
-    return { viewport, snap: getSopAlignmentSnap(node.position, size, others, viewport) };
-  }, [flow, nodes]);
   const onNodeDragStart: OnNodeDrag<Node<SopFlowData>> = useCallback(() => recordHistory(), [recordHistory]);
-  const onNodeDrag: OnNodeDrag<Node<SopFlowData>> = useCallback((_event, node, draggedNodes) => {
-    if (draggedNodes.length > 1) return setAlignLines([]);
-    const { viewport, snap } = snapNode(node);
-    setAlignLines(snap.guides);
-    if (snap.dx !== 0 || snap.dy !== 0) setNodes((current) => current.map((item) => item.id === node.id ? { ...item, position: { x: node.position.x + snap.dx / viewport.zoom, y: node.position.y + snap.dy / viewport.zoom } } : item));
-  }, [snapNode]);
-  const onNodeDragStop: OnNodeDrag<Node<SopFlowData>> = useCallback((_event, node, draggedNodes) => {
-    if (draggedNodes.length <= 1) {
-      const { viewport, snap } = snapNode(node);
-      if (snap.dx !== 0 || snap.dy !== 0) setNodes((current) => current.map((item) => item.id === node.id ? { ...item, position: { x: node.position.x + snap.dx / viewport.zoom, y: node.position.y + snap.dy / viewport.zoom } } : item));
-    }
+  const onNodeDragStop: OnNodeDrag<Node<SopFlowData>> = useCallback(() => {
     setAlignLines([]);
     markDirty();
-  }, [markDirty, snapNode]);
+  }, [markDirty, setAlignLines]);
 
   const selectedNode = useMemo(() => selectedNodeIds.size === 1 ? nodes.find((node) => selectedNodeIds.has(node.id)) ?? null : null, [nodes, selectedNodeIds]);
   const selectedEdge = useMemo(() => selectedEdgeIds.size === 1 ? edges.find((edge) => selectedEdgeIds.has(edge.id)) ?? null : null, [edges, selectedEdgeIds]);
@@ -410,7 +406,7 @@ export function useSopEditor(initial: WorkflowDraft) {
       setJsonError(null);
       setShowJsonPanel(false);
       markDirty();
-    } catch (error) { setJsonError(error instanceof Error ? error.message : String(error)); }
+    } catch (error) { setJsonError(getErrorMessage(error, { source: "input" })); }
   }, [jsonText, markDirty, recordHistory]);
 
   useEffect(() => {
@@ -435,7 +431,7 @@ export function useSopEditor(initial: WorkflowDraft) {
     alignLines, showJsonPanel, jsonText, jsonError, dirtyRevision, debugState, connectionHint, searchQuery, searchMatches,
     canUndo: history.past.length > 0, canRedo: history.future.length > 0,
     setName, setSummary, setSelectedNodeIds, setSelectedEdgeIds, setShowJsonPanel, setJsonText, setJsonError, setConnectionHint, setSearchQuery,
-    onNodesChange, onEdgesChange, onConnect, checkConnection, addNodeOfType, onDragOver, onDrop, onNodeDragStart, onNodeDrag, onNodeDragStop,
+    onNodesChange, onEdgesChange, onConnect, onReconnect, checkConnection, addNodeOfType, onDragOver, onDrop, onNodeDragStart, onNodeDragStop,
     updateSelectedNode, updateSelectedEdgeLabel, deleteSelected, duplicateSelected, copySelected, pasteSelected, undo, redo, autoLayout,
     toggleSelectedPinned, toggleSelectedCollapsed, enterContainer, exitContainer, navigateToScope, focusNode, fitSelection, resizeViewport, runValidation, currentDraft, openJsonExport, importJson, clearValidation,
     clearRunState, applyRunEvent,
