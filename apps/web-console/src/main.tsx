@@ -1,7 +1,7 @@
 import React from "react";
 import ReactDOM from "react-dom/client";
 import { AppErrorBoundary } from "./app/AppErrorBoundary";
-import { App } from "./app/App";
+import { AppEntry } from "./app/AppEntry";
 import { lazy, Suspense } from "react";
 import "./styles.css";
 import "./styles/compact-console.css";
@@ -22,7 +22,7 @@ ReactDOM.createRoot(document.getElementById("root") as HTMLElement).render(
           <DesignPreviewPage />
         </Suspense>
       ) : (
-        <App />
+        <AppEntry />
       )}
     </AppErrorBoundary>
   </React.StrictMode>,

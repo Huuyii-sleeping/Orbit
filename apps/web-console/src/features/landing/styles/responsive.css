@@ -1,0 +1,647 @@
+@media (min-width: 1024px) and (max-width: 1370px) {
+  .orbit-landing .hero-canvas {
+    grid-template-columns: 440px 1fr;
+    gap: 30px;
+  }
+  .orbit-landing .hero-copy h1 {
+    font-size: 50px;
+  }
+  .orbit-landing .hero-visual {
+    margin-left: 0;
+    width: 720px;
+  }
+  .orbit-landing .hero-canvas .app-window {
+    width: 720px;
+  }
+  .orbit-landing .hero-canvas .window-content {
+    grid-template-columns: 44px 1fr 174px;
+  }
+  .orbit-landing .hero-canvas .mini-nav > span {
+    width: 44px;
+  }
+  .orbit-landing .hero-visual .mock-caption {
+    width: 720px;
+  }
+  .orbit-landing .feature-row {
+    gap: 64px;
+  }
+}
+@media (max-width: 1190px) and (min-width: 1024px) {
+  .orbit-landing .hero-canvas {
+    grid-template-columns: 1fr;
+    gap: 48px;
+    padding-top: 72px;
+  }
+  .orbit-landing .hero-copy {
+    max-width: 640px;
+  }
+  .orbit-landing .hero-copy h1 {
+    font-size: 60px;
+  }
+  .orbit-landing .hero-legend {
+    max-width: 500px;
+  }
+  .orbit-landing .hero-side-note {
+    display: none;
+  }
+  .orbit-landing .hero-visual {
+    width: 100%;
+    margin-left: 0;
+  }
+  .orbit-landing .hero-canvas .app-window {
+    width: 100%;
+  }
+  .orbit-landing .hero-visual .mock-caption {
+    width: 100%;
+  }
+  .orbit-landing .hero-canvas .window-content {
+    grid-template-columns: 48px 1fr 232px;
+  }
+  .orbit-landing .hero-canvas .flow-area {
+    min-width: 500px;
+  }
+  .orbit-landing .hero-canvas .connections {
+    width: 500px;
+  }
+  .orbit-landing .feature-row {
+    gap: 40px;
+  }
+  .orbit-landing .developer-grid {
+    gap: 48px;
+  }
+}
+@media (max-width: 1023px) {
+  .orbit-landing .container {
+    width: calc(100% - 64px);
+  }
+  .orbit-landing .section {
+    padding-block: 88px;
+  }
+  .orbit-landing .nav-links {
+    gap: 20px;
+  }
+  .orbit-landing .hero {
+    padding-top: 64px;
+    padding-bottom: 64px;
+  }
+  .orbit-landing .hero-canvas {
+    grid-template-columns: 1fr;
+    gap: 48px;
+    min-height: 0;
+  }
+  .orbit-landing .hero-copy h1 {
+    font-size: 60px;
+    white-space: normal;
+  }
+  .orbit-landing .hero-copy {
+    max-width: 660px;
+  }
+  .orbit-landing .hero-legend {
+    max-width: 500px;
+  }
+  .orbit-landing .hero-side-note {
+    display: none;
+  }
+  .orbit-landing .hero-visual {
+    width: 100%;
+    margin-left: 0;
+    overflow: visible;
+  }
+  .orbit-landing .hero-canvas .app-window {
+    width: 100%;
+  }
+  .orbit-landing .window-content {
+    grid-template-columns: 44px 1fr 200px;
+  }
+  .orbit-landing .flow-area {
+    min-width: 460px;
+  }
+  .orbit-landing .hero-visual .mock-caption {
+    width: 100%;
+  }
+  .orbit-landing .hero-visual:before {
+    display: none;
+  }
+  .orbit-landing .section-heading {
+    gap: 32px;
+    margin-bottom: 56px;
+  }
+  .orbit-landing .section-heading h2 {
+    font-size: 32px;
+  }
+  .orbit-landing .section-intro {
+    max-width: 350px;
+    padding-left: 20px;
+  }
+  .orbit-landing .section-intro p {
+    font-size: 12px;
+  }
+  .orbit-landing .section-intro > .mono {
+    font-size: 10px;
+  }
+  .orbit-landing .feature-row,
+  .orbit-landing .feature-row.reverse {
+    gap: 40px;
+    grid-template-columns: 5fr 7fr;
+    padding-bottom: 64px;
+    margin-bottom: 64px;
+  }
+  .orbit-landing .feature-copy h3 {
+    font-size: 22px;
+  }
+  .orbit-landing .feature-copy p {
+    font-size: 12px;
+  }
+  .orbit-landing .config-tabs {
+    gap: 20px;
+  }
+  .orbit-landing .config-tabs button {
+    font-size: 10px;
+  }
+  .orbit-landing .config-body {
+    padding: 20px;
+  }
+  .orbit-landing .panel-heading {
+    padding-inline: 20px;
+    font-size: 11px;
+  }
+  .orbit-landing .config-content {
+    padding: 14px;
+  }
+  .orbit-landing .config-content p {
+    font-size: 10px;
+  }
+  .orbit-landing .developer-grid {
+    gap: 48px;
+    grid-template-columns: 5fr 7fr;
+  }
+  .orbit-landing .developer-copy h2 {
+    font-size: 32px;
+  }
+  .orbit-landing .closing {
+    padding-block: 100px;
+    gap: 24px;
+  }
+  .orbit-landing .closing h2 {
+    font-size: 32px;
+  }
+  .orbit-landing .closing-actions .button {
+    font-size: 12px;
+    gap: 10px;
+  }
+}
+@media (max-width: 760px) {
+  .orbit-landing .container {
+    width: calc(100% - 40px);
+  }
+  .orbit-landing {
+    scroll-padding-top: 90px;
+  }
+  .orbit-landing {
+    font-size: 15px;
+  }
+  .orbit-landing h1 {
+    font-size: 40px;
+  }
+  .orbit-landing h2 {
+    font-size: 28px;
+  }
+  .orbit-landing h3 {
+    font-size: 20px;
+  }
+  .orbit-landing .section {
+    padding-block: 72px;
+  }
+  .orbit-landing .eyebrow {
+    font-size: 9px;
+    letter-spacing: 0.1em;
+    margin-bottom: 24px;
+  }
+  .orbit-landing .nav {
+    height: 64px;
+  }
+  .orbit-landing .nav .brand {
+    font-size: 20px;
+  }
+  .orbit-landing .menu-toggle {
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    gap: 5px;
+    width: 44px;
+    height: 44px;
+  }
+  .orbit-landing .menu-toggle span {
+    height: 1px;
+    background: var(--ink);
+    width: 20px;
+    margin-left: auto;
+  }
+  .orbit-landing .nav-links {
+    display: none;
+    position: absolute;
+    top: 63px;
+    left: 0;
+    right: 0;
+    background: white;
+    padding: 20px;
+    border-bottom: 1px solid var(--line);
+    align-items: stretch;
+    gap: 8px;
+  }
+  .orbit-landing .nav-links.open {
+    display: flex;
+    flex-direction: column;
+  }
+  .orbit-landing .nav-links > a {
+    padding: 10px 0;
+  }
+  .orbit-landing .nav-links .button {
+    margin-top: 8px;
+  }
+  .orbit-landing .nav-links .button svg {
+    margin-left: 8px;
+  }
+  .orbit-landing .hero {
+    padding-top: 48px;
+    padding-bottom: 56px;
+  }
+  .orbit-landing .hero-copy h1 {
+    font-size: 40px;
+    letter-spacing: -0.04em;
+    white-space: nowrap;
+  }
+  .orbit-landing .hero-copy .eyebrow {
+    font-size: 8px;
+    gap: 8px;
+    letter-spacing: 0.09em;
+  }
+  .orbit-landing .hero-copy .eyebrow > span:first-child:empty {
+    width: 16px;
+  }
+  .orbit-landing .hero-description {
+    font-size: 13px;
+    margin-top: 20px;
+    line-height: 1.9;
+  }
+  .orbit-landing .actions {
+    gap: 8px;
+    margin-top: 24px;
+  }
+  .orbit-landing .actions .button {
+    font-size: 11px;
+    min-width: 140px;
+    gap: 12px;
+    padding-inline: 14px;
+  }
+  .orbit-landing .hero-legend {
+    font-size: 7px;
+    gap: 3px;
+    margin-top: 28px;
+    padding-top: 20px;
+  }
+  .orbit-landing .hero-canvas {
+    gap: 36px;
+    overflow: hidden;
+  }
+  .orbit-landing .hero-visual {
+    width: 100%;
+    overflow-x: auto;
+    overscroll-behavior-inline: contain;
+    scrollbar-width: thin;
+    padding: 5px 5px 18px;
+    margin-left: -5px;
+    box-sizing: content-box;
+  }
+  .orbit-landing .hero-canvas .app-window {
+    width: 760px;
+    min-width: 680px;
+  }
+  .orbit-landing .hero-visual .mock-caption {
+    width: 760px;
+    font-size: 9px;
+  }
+  .orbit-landing .hero-visual:after {
+    content: "↔ 横向滑动，查看完整画布";
+    position: sticky;
+    left: 0;
+    font: 400 9px/2 var(--mono);
+    color: var(--ink-3);
+    display: block;
+    margin-top: 10px;
+    width: 280px;
+  }
+  .orbit-landing .window-content {
+    grid-template-columns: 48px 1fr 208px;
+  }
+  .orbit-landing .flow-area {
+    min-width: 500px;
+  }
+  .orbit-landing .section-heading {
+    display: block;
+    margin-bottom: 40px;
+  }
+  .orbit-landing .section-heading h2 {
+    font-size: 28px;
+  }
+  .orbit-landing .section-intro {
+    margin-top: 28px;
+    max-width: none;
+    padding-left: 16px;
+  }
+  .orbit-landing .section-intro p {
+    font-size: 12px;
+  }
+  .orbit-landing .section-intro > .mono {
+    font-size: 9px;
+    margin-top: 12px;
+  }
+  .orbit-landing .feature-row,
+  .orbit-landing .feature-row.reverse {
+    display: flex;
+    flex-direction: column;
+    gap: 32px;
+    align-items: stretch;
+    padding-bottom: 48px;
+    margin-bottom: 48px;
+  }
+  .orbit-landing .feature-copy {
+    max-width: 100%;
+  }
+  .orbit-landing .feature-copy h3 {
+    font-size: 24px;
+  }
+  .orbit-landing .feature-copy p {
+    font-size: 13px;
+    max-width: 420px;
+  }
+  .orbit-landing .section-index {
+    font-size: 10px;
+    margin-bottom: 16px;
+  }
+  .orbit-landing .feature-copy .text-link {
+    margin-top: 16px;
+  }
+  .orbit-landing .feature-foot {
+    font-size: 8px;
+    margin-top: 24px;
+    padding-top: 12px;
+  }
+  .orbit-landing .panel-heading {
+    padding-inline: 16px;
+    font-size: 11px;
+  }
+  .orbit-landing .config-tabs {
+    margin-inline: 16px;
+    justify-content: space-between;
+    gap: 12px;
+  }
+  .orbit-landing .config-tabs button {
+    font-size: 11px;
+    min-height: 46px;
+  }
+  .orbit-landing .config-body {
+    padding: 16px;
+  }
+  .orbit-landing .config-content p {
+    font-size: 11px;
+  }
+  .orbit-landing .config-content {
+    padding: 16px;
+  }
+  .orbit-landing .config-settings > div {
+    font-size: 11px;
+  }
+  .orbit-landing .config-settings code {
+    font-size: 9px;
+  }
+  .orbit-landing .panel-note {
+    font-size: 9px;
+  }
+  .orbit-landing .run-player {
+    overflow: hidden;
+  }
+  .orbit-landing .player-head {
+    padding: 14px 16px;
+    gap: 8px;
+  }
+  .orbit-landing .player-head .mono {
+    font-size: 9px;
+  }
+  .orbit-landing .player-head .muted {
+    display: none;
+  }
+  .orbit-landing .player-track-area {
+    padding: 20px 16px;
+  }
+  .orbit-landing .track-labels {
+    display: none;
+  }
+  .orbit-landing .scrub-track {
+    display: none;
+  }
+  .orbit-landing .stage-tabs {
+    display: flex;
+    flex-direction: column;
+    gap: 16px;
+    margin-left: 14px;
+    padding-left: 25px;
+    border-left: 1px solid var(--line-strong);
+  }
+  .orbit-landing .stage-tab {
+    padding: 12px 16px;
+    display: grid;
+    grid-template-columns: 1fr 2fr 36px;
+    align-items: center;
+    gap: 10px;
+  }
+  .orbit-landing .stage-tab > span {
+    font-size: 9px;
+    display: block;
+  }
+  .orbit-landing .stage-tab .status-dot {
+    position: absolute;
+    left: -30px;
+    top: 50%;
+    margin-top: -3px;
+    background: var(--paper);
+  }
+  .orbit-landing .stage-tab.done .status-dot,
+  .orbit-landing .stage-tab.active .status-dot {
+    background: var(--accent);
+  }
+  .orbit-landing .stage-tab.waiting .status-dot {
+    background: var(--warn-soft);
+  }
+  .orbit-landing .stage-tab > b {
+    font-size: 12px;
+    margin: 0;
+  }
+  .orbit-landing .stage-tab > time {
+    font-size: 9px;
+    text-align: right;
+  }
+  .orbit-landing .stage-tab:not(:last-child):after {
+    display: none;
+  }
+  .orbit-landing .player-detail {
+    grid-template-columns: 1fr;
+    min-height: 0;
+  }
+  .orbit-landing .io-panel {
+    padding: 24px 20px;
+  }
+  .orbit-landing .live-io h3 {
+    font-size: 20px;
+    margin: 20px 0;
+  }
+  .orbit-landing .io-columns {
+    grid-template-columns: 1fr 1fr;
+    gap: 16px;
+  }
+  .orbit-landing .kv-row {
+    display: block;
+    font-size: 10px;
+  }
+  .orbit-landing .events-panel {
+    border-top: 1px solid var(--line);
+    border-left: 0;
+    padding: 24px 20px;
+  }
+  .orbit-landing .live-events {
+    max-height: 220px;
+  }
+  .orbit-landing .event-row {
+    font-size: 9px;
+    grid-template-columns: 36px 1fr 1.2fr;
+    gap: 6px;
+    padding: 8px 0;
+  }
+  .orbit-landing .player-controls {
+    margin-top: 24px;
+  }
+  .orbit-landing .player-controls .button {
+    min-width: 120px;
+    font-size: 11px;
+    gap: 8px;
+  }
+  .orbit-landing .player-foot {
+    padding: 12px 16px;
+    display: block;
+    font-size: 8px;
+  }
+  .orbit-landing .player-foot > span {
+    display: block;
+  }
+  .orbit-landing .player-foot > span + span {
+    margin-top: 4px;
+  }
+  .orbit-landing .run-context {
+    font-size: 8px;
+  }
+  .orbit-landing .demo-section .mock-caption {
+    font-size: 8px;
+  }
+  .orbit-landing .developer-grid {
+    grid-template-columns: 1fr;
+    gap: 48px;
+  }
+  .orbit-landing .developer-copy {
+    position: static;
+  }
+  .orbit-landing .developer-copy h2 {
+    font-size: 28px;
+  }
+  .orbit-landing .developers .eyebrow {
+    font-size: 8px;
+  }
+  .orbit-landing .closing {
+    padding-block: 88px;
+    grid-template-columns: 1fr;
+    gap: 32px;
+    min-height: 0;
+  }
+  .orbit-landing .closing h2 {
+    font-size: 28px;
+    line-height: 1.5;
+  }
+  .orbit-landing .closing-copy p {
+    font-size: 12px;
+    margin-top: 20px;
+  }
+  .orbit-landing .closing-copy .eyebrow {
+    font-size: 8px;
+  }
+  .orbit-landing .closing-actions {
+    justify-self: start;
+    margin: 0;
+  }
+  .orbit-landing .closing-orbit {
+    display: none;
+  }
+  .orbit-landing .footer {
+    padding-block: 32px;
+  }
+  .orbit-landing .footer-top {
+    flex-wrap: wrap;
+    gap: 24px;
+  }
+  .orbit-landing .footer-top nav {
+    order: 3;
+    width: 100%;
+    gap: 24px;
+    font-size: 10px;
+  }
+  .orbit-landing .footer-top > .mono {
+    font-size: 9px;
+    margin-left: auto;
+  }
+  .orbit-landing .footer .container > p {
+    font-size: 8px;
+    margin-top: 24px;
+  }
+}
+@media (max-width: 370px) {
+  .orbit-landing .container {
+    width: calc(100% - 32px);
+  }
+  .orbit-landing .hero-copy h1 {
+    font-size: 36px;
+  }
+  .orbit-landing .hero-copy .eyebrow {
+    font-size: 7px;
+    letter-spacing: 0.06em;
+  }
+  .orbit-landing .actions .button {
+    min-width: 132px;
+    padding-inline: 12px;
+  }
+  .orbit-landing .hero-legend {
+    font-size: 6.5px;
+  }
+  .orbit-landing .stage-tab {
+    gap: 4px;
+    padding-inline: 10px;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .orbit-landing {
+    scroll-behavior: auto;
+  }
+  .orbit-landing *,
+  .orbit-landing *:before,
+  .orbit-landing *:after {
+    animation: none !important;
+    transition: none !important;
+  }
+  .orbit-landing.js-motion .reveal {
+    opacity: 1;
+    transform: none;
+  }
+  .orbit-landing .connections circle {
+    display: none;
+  }
+  .orbit-landing .magnet {
+    transform: none !important;
+  }
+}

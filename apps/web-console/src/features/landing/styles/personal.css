@@ -1,0 +1,358 @@
+/* 用单处样例和折叠说明补齐个人用户信息，沿用 A 版的色板与留白。 */
+.orbit-landing .use-cases {
+  border-top: 1px solid var(--line);
+}
+.orbit-landing .use-cases .section-heading {
+  margin-bottom: 40px;
+}
+.orbit-landing .example-tabs {
+  display: flex;
+  gap: 32px;
+  border-bottom: 1px solid var(--line);
+}
+.orbit-landing .example-tabs button {
+  position: relative;
+  display: flex;
+  align-items: center;
+  gap: 40px;
+  padding: 16px 0;
+  border: 0;
+  background: transparent;
+  font-size: 14px;
+  color: var(--ink-3);
+}
+.orbit-landing .example-tabs button span {
+  opacity: 0;
+  color: var(--accent);
+}
+.orbit-landing .example-tabs button[aria-selected="true"] {
+  color: var(--ink);
+}
+.orbit-landing .example-tabs button[aria-selected="true"] span {
+  opacity: 1;
+}
+.orbit-landing .example-tabs button[aria-selected="true"]::after {
+  content: "";
+  position: absolute;
+  inset: auto 0 -1px;
+  height: 2px;
+  background: var(--accent);
+}
+.orbit-landing .example-panel {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  min-height: 340px;
+}
+.orbit-landing .example-input {
+  padding: 40px 64px 32px 0;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+}
+.orbit-landing .example-label {
+  font-size: 11px;
+  color: var(--ink-3);
+  letter-spacing: 0.05em;
+}
+.orbit-landing .example-input h3 {
+  max-width: 370px;
+  margin-top: 24px;
+  font-size: 21px;
+  line-height: 1.7;
+}
+.orbit-landing .example-input p {
+  margin-top: 20px;
+  font-size: 13px;
+  line-height: 2;
+  max-width: 430px;
+}
+.orbit-landing .example-input-note {
+  margin-top: auto;
+  padding-top: 24px;
+  font-size: 11px;
+  color: var(--ink-3);
+}
+.orbit-landing .example-result {
+  margin: 24px 0;
+  padding: 24px 32px;
+  background: var(--paper-2);
+  border: 1px solid var(--line);
+  border-radius: 8px;
+}
+.orbit-landing .example-result-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+.orbit-landing .example-result-head > span:last-child {
+  font-size: 10px;
+  color: var(--ink-3);
+}
+.orbit-landing .example-result h3 {
+  margin-top: 24px;
+  font-size: 18px;
+}
+.orbit-landing .example-result ul {
+  padding: 0;
+  margin: 20px 0 28px;
+  list-style: none;
+}
+.orbit-landing .example-result li {
+  position: relative;
+  margin-top: 12px;
+  padding-left: 14px;
+  font-size: 12px;
+  line-height: 1.9;
+  color: var(--ink-2);
+}
+.orbit-landing .example-result li::before {
+  content: "";
+  position: absolute;
+  left: 0;
+  top: 0.8em;
+  width: 4px;
+  height: 4px;
+  border-radius: 50%;
+  background: var(--accent);
+}
+.orbit-landing .example-file {
+  border-top: 1px solid var(--line);
+  padding-top: 16px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 10px;
+  color: var(--ink-2);
+}
+.orbit-landing .example-file > span:last-child {
+  margin-left: auto;
+  font-family: var(--body);
+  color: var(--ink-3);
+}
+.orbit-landing .example-foot {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 20px;
+  padding-top: 20px;
+  border-top: 1px solid var(--line);
+  font-size: 12px;
+}
+.orbit-landing .example-foot .text-link {
+  color: var(--accent);
+  font-size: 12px;
+}
+.orbit-landing .capabilities {
+  padding-top: 24px;
+}
+.orbit-landing .feature-copy h2 {
+  font-size: 24px;
+  font-weight: 600;
+  line-height: 1.5;
+}
+.orbit-landing .capabilities .feature-row {
+  margin-bottom: 0;
+  padding-bottom: 64px;
+}
+.orbit-landing .getting-started {
+  padding-top: 32px;
+}
+.orbit-landing .getting-started > h3 {
+  color: var(--ink-3);
+  font-size: 12px;
+  font-weight: 400;
+}
+.orbit-landing .getting-started ol {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 40px;
+  list-style: none;
+  padding: 0;
+  margin: 24px 0 0;
+}
+.orbit-landing .getting-started li {
+  display: flex;
+  gap: 16px;
+}
+.orbit-landing .getting-started li > span {
+  padding-top: 2px;
+  color: var(--accent);
+  font-size: 11px;
+}
+.orbit-landing .getting-started h4 {
+  margin: 0 0 8px;
+  font-size: 14px;
+  font-weight: 500;
+}
+.orbit-landing .getting-started p {
+  font-size: 12px;
+  line-height: 1.9;
+}
+.orbit-landing .control-section .developer-grid {
+  align-items: center;
+}
+.orbit-landing .control-section .developer-copy {
+  position: static;
+}
+.orbit-landing .control-points {
+  margin: 0;
+}
+.orbit-landing .control-points > div {
+  padding-block: 24px;
+  border-top: 1px solid var(--dark-line);
+}
+.orbit-landing .control-points > div:last-child {
+  padding-bottom: 0;
+}
+.orbit-landing .control-points dt {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  font-size: 16px;
+}
+.orbit-landing .control-points dd {
+  margin: 12px 0 0 19px;
+  font-size: 13px;
+  line-height: 1.9;
+  color: var(--dark-ink-2);
+}
+.orbit-landing .control-version {
+  font-size: 10px;
+  color: var(--dark-accent);
+  border: 1px solid var(--dark-line);
+  border-radius: 3px;
+  padding: 0 5px;
+}
+.orbit-landing .landing-questions {
+  display: grid;
+  grid-template-columns: 5fr 7fr;
+  gap: 88px;
+}
+.orbit-landing .questions-intro .eyebrow {
+  font-size: 10px;
+}
+.orbit-landing .questions-intro h2 {
+  line-height: 1.4;
+}
+.orbit-landing .landing-question {
+  border-top: 1px solid var(--line);
+}
+.orbit-landing .landing-question:last-child {
+  border-bottom: 1px solid var(--line);
+}
+.orbit-landing .landing-question summary {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 20px;
+  list-style: none;
+  cursor: pointer;
+  padding: 22px 0;
+  font-size: 14px;
+}
+.orbit-landing .landing-question summary::-webkit-details-marker {
+  display: none;
+}
+.orbit-landing .landing-question summary > span {
+  color: var(--ink-3);
+  font-size: 20px;
+  font-weight: 400;
+  flex-shrink: 0;
+}
+.orbit-landing .landing-question[open] summary > span {
+  transform: rotate(45deg);
+}
+.orbit-landing .landing-question p {
+  padding: 0 32px 24px 0;
+  font-size: 13px;
+  line-height: 2;
+}
+.orbit-landing .closing {
+  border-top: 1px solid var(--line);
+}
+@media (max-width: 1023px) {
+  .orbit-landing .example-input {
+    padding-right: 32px;
+  }
+  .orbit-landing .example-result {
+    padding: 24px;
+  }
+  .orbit-landing .getting-started ol {
+    gap: 24px;
+  }
+  .orbit-landing .landing-questions {
+    gap: 48px;
+  }
+}
+@media (max-width: 760px) {
+  .orbit-landing .use-cases .section-heading {
+    margin-bottom: 24px;
+  }
+  .orbit-landing .example-tabs {
+    gap: 0;
+    justify-content: space-between;
+  }
+  .orbit-landing .example-tabs button {
+    font-size: 13px;
+    gap: 12px;
+  }
+  .orbit-landing .example-panel {
+    grid-template-columns: 1fr;
+    min-height: 0;
+  }
+  .orbit-landing .example-input {
+    padding: 28px 0 24px;
+  }
+  .orbit-landing .example-input h3 {
+    margin-top: 16px;
+    font-size: 19px;
+  }
+  .orbit-landing .example-input p {
+    margin-top: 16px;
+  }
+  .orbit-landing .example-input-note {
+    display: none;
+  }
+  .orbit-landing .example-result {
+    margin: 0 0 24px;
+    padding: 24px 20px;
+  }
+  .orbit-landing .example-file {
+    flex-wrap: wrap;
+  }
+  .orbit-landing .example-file > span:last-child {
+    margin-left: 0;
+  }
+  .orbit-landing .example-foot {
+    align-items: flex-start;
+    flex-direction: column;
+    gap: 12px;
+  }
+  .orbit-landing .capabilities {
+    padding-top: 12px;
+  }
+  .orbit-landing .capabilities .feature-row {
+    padding-bottom: 32px;
+  }
+  .orbit-landing .getting-started ol {
+    grid-template-columns: 1fr;
+    gap: 24px;
+  }
+  .orbit-landing .control-section .developer-grid {
+    gap: 40px;
+  }
+  .orbit-landing .landing-questions {
+    grid-template-columns: 1fr;
+    gap: 32px;
+  }
+  .orbit-landing .questions-intro h2 {
+    font-size: 28px;
+  }
+  .orbit-landing .landing-question summary {
+    font-size: 13px;
+    padding-block: 20px;
+  }
+  .orbit-landing .landing-question p {
+    padding-right: 0;
+  }
+}

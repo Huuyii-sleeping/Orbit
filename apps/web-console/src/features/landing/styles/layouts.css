@@ -1,0 +1,289 @@
+.orbit-landing .nav {
+  height: 72px;
+  position: sticky;
+  top: 0;
+  z-index: 20;
+  transition:
+    background 0.2s,
+    border-color 0.2s;
+  border-bottom: 1px solid transparent;
+}
+.orbit-landing .nav.scrolled {
+  background: rgba(255, 255, 255, 0.96);
+  border-color: var(--line);
+}
+.orbit-landing .nav-inner {
+  height: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+.orbit-landing .nav-links {
+  display: flex;
+  align-items: center;
+  gap: 32px;
+  font-size: 12px;
+  color: var(--ink-2);
+}
+.orbit-landing .nav-links .button {
+  min-height: 40px;
+  min-width: 126px;
+  padding: 9px 16px;
+  font-size: 12px;
+  gap: 18px;
+}
+.orbit-landing .nav-links svg {
+  width: 16px;
+  height: 16px;
+}
+.orbit-landing .menu-toggle {
+  display: none;
+}
+.orbit-landing .hero {
+  padding-top: 100px;
+  padding-bottom: 100px;
+  position: relative;
+}
+.orbit-landing .hero-canvas {
+  display: grid;
+  grid-template-columns: 5fr 7fr;
+  align-items: center;
+  gap: 32px;
+  min-height: 755px;
+}
+.orbit-landing .hero-copy {
+  min-width: 0;
+}
+.orbit-landing .hero-copy h1 {
+  font-size: 56px;
+  white-space: nowrap;
+}
+.orbit-landing .hero-description {
+  font-size: 15px;
+  line-height: 1.95;
+  margin-top: 24px;
+}
+.orbit-landing .hero-legend {
+  border-top: 1px solid var(--line);
+  padding-top: 22px;
+  margin-top: 40px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 7px;
+  white-space: nowrap;
+  font-size: 9px;
+  color: var(--ink-3);
+}
+.orbit-landing .hero-legend > span {
+  color: var(--line-strong);
+}
+.orbit-landing .hero-side-note {
+  display: block;
+  margin-top: 56px;
+  font-size: 9px;
+  letter-spacing: 0.08em;
+  color: var(--ink-3);
+}
+.orbit-landing .hero-visual {
+  width: 760px;
+  margin-left: 12px;
+  position: relative;
+}
+.orbit-landing .hero-visual:before {
+  content: "";
+  position: absolute;
+  top: -88px;
+  left: -220px;
+  width: 990px;
+  height: 660px;
+  border: 1px solid var(--line);
+  border-radius: 50%;
+  transform: rotate(-18deg);
+  opacity: 0.5;
+  z-index: -1;
+  pointer-events: none;
+}
+.orbit-landing .hero-canvas .app-window {
+  width: 760px;
+}
+.orbit-landing .hero-canvas .hero-visual {
+  margin-right: -40px;
+}
+.orbit-landing .hero-visual .mock-caption {
+  width: 760px;
+}
+.orbit-landing .hero-copy .eyebrow {
+  font-size: 10px;
+  letter-spacing: 0.13em;
+}
+.orbit-landing .feature-row {
+  display: grid;
+  grid-template-columns: 5fr 7fr;
+  align-items: center;
+  gap: 88px;
+  padding: 0 0 88px;
+  margin-bottom: 88px;
+  border-bottom: 1px solid var(--line);
+}
+.orbit-landing .feature-copy {
+  max-width: 400px;
+}
+.orbit-landing .feature-copy h3 {
+  line-height: 1.5;
+}
+.orbit-landing .feature-copy p {
+  font-size: 14px;
+  line-height: 1.95;
+  margin-top: 20px;
+}
+.orbit-landing .feature-copy .text-link {
+  margin-top: 24px;
+}
+.orbit-landing .feature-foot {
+  color: var(--ink-3);
+  font-size: 9px;
+  letter-spacing: 0.04em;
+  margin-top: 40px;
+  padding-top: 16px;
+  border-top: 1px solid var(--line);
+}
+.orbit-landing .demo-section {
+  background: var(--paper-2);
+  border-block: 1px solid var(--line);
+}
+.orbit-landing .demo-section .mock-caption {
+  font-size: 9px;
+  margin-top: 20px;
+}
+.orbit-landing .developers {
+  background: var(--dark-bg);
+  color: var(--dark-ink);
+}
+.orbit-landing .developer-grid {
+  display: grid;
+  grid-template-columns: 5fr 7fr;
+  gap: 88px;
+  align-items: start;
+}
+.orbit-landing .developers .eyebrow {
+  color: var(--dark-ink-2);
+  font-size: 10px;
+}
+.orbit-landing .developers .eyebrow > span:first-child:empty {
+  background: var(--dark-line);
+}
+.orbit-landing .developer-copy {
+  position: sticky;
+  top: 140px;
+}
+.orbit-landing .developer-copy h2 {
+  line-height: 1.35;
+}
+.orbit-landing .closing {
+  padding-block: 160px;
+  display: grid;
+  grid-template-columns: 7fr 5fr;
+  gap: 48px;
+  position: relative;
+  min-height: 480px;
+}
+.orbit-landing .closing-orbit {
+  position: absolute;
+  inset: 100px 0 0;
+  width: 100%;
+  height: 340px;
+  stroke: var(--line);
+  z-index: -1;
+  pointer-events: none;
+}
+.orbit-landing .closing-orbit circle {
+  fill: var(--accent);
+  stroke: none;
+}
+.orbit-landing .closing-copy .eyebrow {
+  font-size: 10px;
+}
+.orbit-landing .closing-copy h2 {
+  line-height: 1.4;
+}
+.orbit-landing .closing-copy p {
+  font-size: 14px;
+  margin-top: 24px;
+}
+.orbit-landing .closing-actions {
+  align-self: end;
+  justify-self: end;
+  margin-bottom: 12px;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 14px;
+}
+.orbit-landing .closing-actions .text-link {
+  font-size: 12px;
+  color: var(--ink-3);
+}
+.orbit-landing .footer {
+  border-top: 1px solid var(--line);
+  padding-block: 48px;
+}
+.orbit-landing .footer-top {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 24px;
+}
+.orbit-landing .footer-top .brand {
+  font-size: 18px;
+}
+.orbit-landing .footer-top nav {
+  display: flex;
+  gap: 32px;
+  font-size: 11px;
+  color: var(--ink-2);
+}
+.orbit-landing .footer-top > .mono {
+  font-size: 10px;
+  color: var(--ink-3);
+}
+.orbit-landing .footer .container > p {
+  font-size: 9px;
+  color: var(--ink-3);
+  margin-top: 28px;
+}
+@media (min-width: 1440px) {
+  .orbit-landing .container {
+    width: 1200px;
+  }
+  .orbit-landing .hero-copy h1 {
+    font-size: 60px;
+  }
+  .orbit-landing .hero-canvas {
+    gap: 32px;
+    grid-template-columns: 500px 1fr;
+  }
+  .orbit-landing .hero-canvas .hero-visual {
+    margin-left: 0;
+  }
+  .orbit-landing .hero {
+    padding-top: 100px;
+  }
+  .orbit-landing .hero-canvas {
+    padding-bottom: 110px;
+  }
+}
+@media (min-width: 1600px) {
+  .orbit-landing .container {
+    width: 1200px;
+  }
+  .orbit-landing .hero-canvas .hero-visual {
+    width: 800px;
+  }
+  .orbit-landing .hero-canvas .app-window {
+    width: 800px;
+  }
+  .orbit-landing .hero-canvas .window-content {
+    grid-template-columns: 48px 1fr 232px;
+  }
+}

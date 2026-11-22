@@ -177,17 +177,6 @@ export function App() {
     }
   }
 
-  function openWorkspace(initialView: AppView = "agent"): void {
-    setRoute("workspace");
-    setView(initialView);
-    if (
-      window.location.pathname !== appRoutePath("workspace") ||
-      window.location.hash
-    ) {
-      window.history.pushState("", document.title, appRoutePath("workspace"));
-    }
-  }
-
   useEffect(() => {
     void bootstrap();
   }, []);
@@ -266,7 +255,7 @@ export function App() {
   }[view];
 
   if (route === "landing") {
-    return <LandingPage onStart={() => openWorkspace("agent")} />;
+    return <LandingPage />;
   }
 
   return (

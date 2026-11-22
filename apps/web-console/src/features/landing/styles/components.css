@@ -1,0 +1,711 @@
+.orbit-landing .app-window {
+  border: 1px solid var(--line-strong);
+  border-radius: 12px;
+  background: white;
+  overflow: hidden;
+  box-shadow: 0 1px 2px rgba(26, 28, 27, 0.04);
+}
+.orbit-landing .window-bar {
+  height: 46px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0 16px;
+  border-bottom: 1px solid var(--line);
+  gap: 16px;
+}
+.orbit-landing .window-name {
+  font: 400 11px/1.6 var(--mono);
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  white-space: nowrap;
+}
+.orbit-landing .tiny-logo {
+  font-size: 20px;
+}
+.orbit-landing .version-chips {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+}
+.orbit-landing .version-chips .chip + .chip {
+  border-left: 1px solid var(--line);
+}
+.orbit-landing .window-content {
+  display: grid;
+  grid-template-columns: 48px 1fr 208px;
+  height: 514px;
+}
+.orbit-landing .mini-nav {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  border-right: 1px solid var(--line);
+  padding-top: 18px;
+  gap: 6px;
+}
+.orbit-landing .mini-nav > span {
+  display: grid;
+  place-items: center;
+  width: 48px;
+  height: 36px;
+  font: 400 10px/1 var(--mono);
+  color: var(--ink-3);
+  border-left: 2px solid transparent;
+}
+.orbit-landing .mini-nav > span.selected {
+  background: var(--accent-soft);
+  color: var(--accent);
+  border-left-color: var(--accent);
+}
+.orbit-landing .mini-nav > b {
+  font: 400 11px var(--mono);
+  margin-top: auto;
+  margin-bottom: 16px;
+  border: 1px solid var(--line);
+  border-radius: 50%;
+  width: 17px;
+  height: 17px;
+  text-align: center;
+  color: var(--ink-3);
+}
+.orbit-landing .flow-area {
+  position: relative;
+  overflow: hidden;
+  background-color: var(--paper-2);
+  background-image: radial-gradient(var(--line-strong) 0.65px, transparent 0.65px);
+  background-size: 24px 24px;
+  min-width: 500px;
+}
+.orbit-landing .canvas-tools {
+  position: absolute;
+  top: 16px;
+  left: 18px;
+  display: flex;
+  background: white;
+  border: 1px solid var(--line);
+  border-radius: 4px;
+  padding: 2px 0;
+  z-index: 2;
+}
+.orbit-landing .canvas-tools span {
+  padding: 0 8px;
+  border-right: 1px solid var(--line);
+  font-size: 11px;
+}
+.orbit-landing .canvas-tools span:last-child {
+  border: 0;
+  color: var(--ink-3);
+}
+.orbit-landing .canvas-label {
+  position: absolute;
+  top: 20px;
+  right: 16px;
+  font-size: 9px;
+  color: var(--ink-3);
+  letter-spacing: 0.05em;
+}
+.orbit-landing .canvas-label span {
+  display: block;
+  text-align: right;
+  font-size: 8px;
+}
+.orbit-landing .connections {
+  position: absolute;
+  inset: 0;
+  width: 500px;
+  height: 440px;
+  overflow: visible;
+  stroke-width: 1.5;
+}
+.orbit-landing .connections .finished,
+.orbit-landing .connections .current {
+  stroke: var(--accent);
+}
+.orbit-landing .connections .future {
+  stroke: var(--line-strong);
+  stroke-dasharray: 4 4;
+}
+.orbit-landing .flow-node {
+  position: absolute;
+  left: var(--x);
+  top: var(--y);
+  width: 176px;
+  height: 80px;
+  text-align: left;
+  padding: 10px 12px;
+  background: white;
+  border: 1px solid var(--line-strong);
+  border-radius: 6px;
+  z-index: 1;
+  transition:
+    border-color 0.2s,
+    background 0.2s,
+    transform 0.3s;
+}
+.orbit-landing .flow-node:hover,
+.orbit-landing .flow-node.highlight {
+  border-color: var(--accent);
+  background: var(--accent-soft);
+}
+.orbit-landing .flow-node.active {
+  border-color: var(--accent);
+  outline: 3px solid var(--accent-line);
+  outline-offset: 3px;
+}
+.orbit-landing .node-top {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  font-size: 9px;
+  color: var(--ink-3);
+  line-height: 1;
+}
+.orbit-landing .node-title {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 12px;
+  font-weight: 500;
+  margin-top: 9px;
+  line-height: 1.3;
+}
+.orbit-landing .node-symbol {
+  font-family: var(--mono);
+  font-size: 15px;
+}
+.orbit-landing .node-sub {
+  display: block;
+  font-size: 9px;
+  color: var(--ink-3);
+  margin-top: 5px;
+  line-height: 1.3;
+}
+.orbit-landing .waiting .node-top,
+.orbit-landing .waiting .node-symbol {
+  color: var(--warn);
+}
+.orbit-landing .port {
+  position: absolute;
+  width: 6px;
+  height: 6px;
+  border: 1px solid var(--line-strong);
+  border-radius: 2px;
+  background: white;
+  top: 50%;
+  transform: translateY(-50%);
+}
+.orbit-landing .port.in {
+  left: -4px;
+}
+.orbit-landing .port.out {
+  right: -4px;
+}
+.orbit-landing .done .port,
+.orbit-landing .active .port,
+.orbit-landing .flow-node:hover .port,
+.orbit-landing .flow-node.highlight .port {
+  background: var(--accent);
+  border-color: var(--accent);
+}
+.orbit-landing .canvas-bottom {
+  position: absolute;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  display: flex;
+  justify-content: space-between;
+  padding: 9px 16px;
+  background: var(--paper-2);
+  border-top: 1px solid var(--line);
+  font-size: 9px;
+  color: var(--ink-3);
+  z-index: 2;
+}
+.orbit-landing .canvas-bottom > span:first-child {
+  color: var(--accent);
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.orbit-landing .runtime-pane {
+  border-left: 1px solid var(--line);
+  background: white;
+  z-index: 2;
+}
+.orbit-landing .pane-label {
+  font-size: 9px;
+  color: var(--ink-3);
+  letter-spacing: 0.08em;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.orbit-landing .runtime-pane > .pane-label {
+  padding: 19px 14px 16px;
+  border-bottom: 1px solid var(--line);
+}
+.orbit-landing .mock-event {
+  padding: 10px 12px;
+  display: flex;
+  gap: 9px;
+  font: 400 9px/1.6 var(--mono);
+  border-bottom: 1px solid var(--line);
+  transition: background 0.2s;
+}
+.orbit-landing .mock-event:hover,
+.orbit-landing .mock-event.highlight {
+  background: var(--accent-soft);
+}
+.orbit-landing .mock-event time {
+  color: var(--ink-3);
+}
+.orbit-landing .mock-event b {
+  display: block;
+  font-weight: 400;
+  color: var(--accent);
+}
+.orbit-landing .output-preview {
+  padding: 20px 14px;
+}
+.orbit-landing .file-label {
+  font: 400 10px/1.7 var(--mono);
+  margin-top: 14px;
+  margin-bottom: 10px;
+}
+.orbit-landing .output-preview p {
+  font-size: 10px;
+  color: var(--ink);
+}
+.orbit-landing .output-preview > .mono {
+  font-size: 8px;
+  color: var(--ink-3);
+}
+.orbit-landing .preview-lines {
+  display: grid;
+  gap: 6px;
+  margin-top: 14px;
+}
+.orbit-landing .preview-lines i {
+  height: 3px;
+  background: var(--paper-3);
+  width: 100%;
+}
+.orbit-landing .preview-lines i:last-child {
+  width: 64%;
+}
+.orbit-landing .output-preview .output-status {
+  display: block;
+  margin-top: 16px;
+  color: var(--accent);
+}
+.orbit-landing .window-footer {
+  height: 30px;
+  padding: 0 14px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  font-size: 8px;
+  color: var(--ink-3);
+  border-top: 1px solid var(--line);
+}
+.orbit-landing .detail-panel {
+  border: 1px solid var(--line-strong);
+  border-radius: 8px;
+  overflow: hidden;
+  background: white;
+}
+.orbit-landing .panel-heading {
+  height: 52px;
+  padding: 0 24px;
+  border-bottom: 1px solid var(--line);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  font-size: 13px;
+  font-weight: 500;
+  gap: 12px;
+}
+.orbit-landing .config-tabs {
+  display: flex;
+  gap: 26px;
+  margin: 0 24px;
+  border-bottom: 1px solid var(--line);
+}
+.orbit-landing .config-tabs button {
+  padding: 15px 0 12px;
+  border-bottom: 2px solid transparent;
+  font-size: 12px;
+  color: var(--ink-3);
+}
+.orbit-landing .config-tabs button[aria-selected="true"] {
+  border-color: var(--accent);
+  color: var(--ink);
+}
+.orbit-landing .config-body {
+  padding: 24px;
+}
+.orbit-landing .config-content {
+  padding: 18px;
+  background: var(--paper-2);
+  border: 1px solid var(--line);
+  border-radius: 4px;
+  min-height: 147px;
+}
+.orbit-landing .config-content > .mono {
+  font-size: 10px;
+}
+.orbit-landing .config-content p {
+  font-size: 12px;
+  line-height: 1.9;
+  margin-top: 10px;
+  color: var(--ink-2);
+}
+.orbit-landing .config-settings {
+  padding-top: 14px;
+}
+.orbit-landing .config-settings > div {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 10px 0;
+  border-bottom: 1px solid var(--line);
+  font-size: 12px;
+}
+.orbit-landing .config-settings code {
+  font-size: 10px;
+  color: var(--ink-2);
+}
+.orbit-landing .panel-note {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 10px;
+  color: var(--ink-3);
+  margin-top: 20px;
+}
+.orbit-landing .run-player {
+  border: 1px solid var(--line-strong);
+  border-radius: 8px;
+  background: var(--paper);
+  overflow: hidden;
+}
+.orbit-landing .player-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  border-bottom: 1px solid var(--line);
+  padding: 16px 24px;
+  gap: 16px;
+}
+.orbit-landing .player-head > span:first-child {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+.orbit-landing .player-head .mono {
+  font-size: 11px;
+}
+.orbit-landing .player-status {
+  color: var(--accent);
+}
+.orbit-landing .player-status.paused {
+  color: var(--warn);
+}
+.orbit-landing .player-track-area {
+  padding: 32px 32px 24px;
+}
+.orbit-landing .track-labels {
+  display: flex;
+  justify-content: space-between;
+  color: var(--ink-3);
+  font-size: 10px;
+}
+.orbit-landing .scrub-track {
+  height: 48px;
+  position: relative;
+  margin: 14px 12px 20px;
+  cursor: ew-resize;
+  touch-action: none;
+}
+.orbit-landing .track-base,
+.orbit-landing .track-fill {
+  position: absolute;
+  height: 1px;
+  top: 26px;
+  left: 0;
+  right: 0;
+  background: var(--line-strong);
+}
+.orbit-landing .track-fill {
+  right: auto;
+  width: var(--progress);
+  background: var(--accent);
+}
+.orbit-landing .track-ticks span {
+  position: absolute;
+  top: 23px;
+  height: 7px;
+  width: 2px;
+  background: var(--line-strong);
+  border-radius: 2px;
+}
+.orbit-landing .track-ticks span.passed {
+  background: var(--accent);
+}
+.orbit-landing .playhead {
+  position: absolute;
+  left: var(--progress);
+  height: 40px;
+  top: 7px;
+  width: 1px;
+  background: var(--accent);
+}
+.orbit-landing .playhead > i {
+  position: absolute;
+  top: -4px;
+  left: -3.5px;
+  width: 8px;
+  height: 8px;
+  background: var(--accent);
+  border-radius: 50%;
+}
+.orbit-landing .time-label {
+  position: absolute;
+  top: -24px;
+  left: 50%;
+  transform: translateX(-50%);
+  font-size: 11px;
+  color: var(--accent);
+  background: white;
+  padding: 0 6px;
+}
+.orbit-landing .stage-tabs {
+  display: grid;
+  grid-template-columns: 1fr 1.25fr 1fr 1fr;
+  gap: 32px;
+}
+.orbit-landing .stage-tab {
+  position: relative;
+  text-align: left;
+  border: 1px solid var(--line-strong);
+  border-radius: 6px;
+  padding: 12px 16px;
+  background: white;
+  min-width: 0;
+}
+.orbit-landing .stage-tab:not(:last-child):after {
+  content: "";
+  position: absolute;
+  left: 100%;
+  width: 33px;
+  height: 1px;
+  top: 50%;
+  background: var(--line-strong);
+}
+.orbit-landing .stage-tab.done:not(:last-child):after {
+  background: var(--accent);
+}
+.orbit-landing .stage-tab > span {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  font-size: 10px;
+  color: var(--ink-3);
+}
+.orbit-landing .stage-tab > b {
+  display: block;
+  font-size: 13px;
+  font-weight: 500;
+  margin-top: 7px;
+}
+.orbit-landing .stage-tab > time {
+  font-size: 9px;
+  color: var(--ink-3);
+}
+.orbit-landing .stage-tab.active {
+  outline: 2px solid var(--accent-line);
+  outline-offset: 3px;
+  border-color: var(--accent);
+  background: var(--accent-soft);
+}
+.orbit-landing .stage-tab.active > span {
+  color: var(--accent);
+}
+.orbit-landing .stage-tab.waiting {
+  background: var(--warn-soft);
+  border-color: var(--warn);
+  outline-color: var(--warn-soft);
+}
+.orbit-landing .stage-tab.waiting > span {
+  color: var(--warn);
+}
+.orbit-landing .stage-tab.waiting > b:after {
+  content: " Ⅱ";
+  color: var(--warn);
+}
+.orbit-landing .stage-tab[aria-selected="true"] {
+  border-color: var(--accent);
+}
+.orbit-landing .stage-tab.pending .status-dot {
+  background: white;
+}
+.orbit-landing .player-detail {
+  display: grid;
+  grid-template-columns: 7fr 5fr;
+  border-top: 1px solid var(--line);
+}
+.orbit-landing .io-panel {
+  padding: 28px 32px;
+}
+.orbit-landing .io-title {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+.orbit-landing .io-title .mono {
+  font-size: 10px;
+}
+.orbit-landing .current-stage {
+  color: var(--accent);
+}
+.orbit-landing .live-io h3,
+.orbit-landing .all-stage-details h3 {
+  margin-top: 20px;
+  margin-bottom: 24px;
+}
+.orbit-landing .io-columns {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 24px;
+}
+.orbit-landing .io-columns > div > .mono {
+  font-size: 10px;
+}
+.orbit-landing .io-columns dl {
+  margin-top: 10px;
+}
+.orbit-landing .kv-row {
+  border-top: 1px solid var(--line);
+  padding-block: 8px;
+  font: 400 11px/1.8 var(--mono);
+}
+.orbit-landing .kv-row dt {
+  color: var(--ink-3);
+}
+.orbit-landing .kv-row dd {
+  overflow-wrap: anywhere;
+}
+.orbit-landing .player-controls {
+  display: flex;
+  gap: 8px;
+  margin-top: 28px;
+  flex-wrap: wrap;
+}
+.orbit-landing .run-context {
+  font-size: 9px;
+  color: var(--ink-3);
+  margin-top: 12px;
+}
+.orbit-landing .events-panel {
+  padding: 28px 24px;
+  border-left: 1px solid var(--line);
+  min-width: 0;
+}
+.orbit-landing .live-events {
+  margin-top: 18px;
+  max-height: 284px;
+  overflow-y: auto;
+  scrollbar-width: thin;
+}
+.orbit-landing .event-row {
+  display: grid;
+  grid-template-columns: 42px 1fr 1fr;
+  align-items: start;
+  gap: 8px;
+  font: 400 10px/1.7 var(--mono);
+  padding: 8px 0;
+  border-bottom: 1px solid var(--line);
+}
+.orbit-landing .event-row time {
+  color: var(--ink-3);
+}
+.orbit-landing .event-row b {
+  font-weight: 400;
+  color: var(--accent);
+  overflow-wrap: anywhere;
+  text-align: right;
+}
+.orbit-landing .event-row:hover {
+  background: var(--paper-2);
+}
+.orbit-landing .event-row.pause-event {
+  color: var(--warn);
+  background: var(--warn-soft);
+  padding-inline: 4px;
+}
+.orbit-landing .event-row.pause-event b {
+  color: var(--warn);
+}
+.orbit-landing .event-row.new-event {
+  animation: event-in 0.3s both;
+  animation-delay: var(--delay, 0ms);
+}
+.orbit-landing .all-stage-details > div + div {
+  border-top: 1px solid var(--line);
+  padding-top: 24px;
+  margin-top: 24px;
+}
+.orbit-landing .player-foot {
+  display: flex;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 12px 24px;
+  border-top: 1px solid var(--line);
+  font-size: 10px;
+  color: var(--ink-3);
+}
+@keyframes event-in {
+  from {
+    opacity: 0;
+    transform: translateY(5px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+@keyframes node-in {
+  from {
+    opacity: 0;
+    transform: scale(0.96);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1);
+  }
+}
+.orbit-landing.js-motion .flow-node {
+  animation: node-in 0.5s cubic-bezier(0.34, 1.4, 0.64, 1) both;
+  animation-delay: calc(0.12s + var(--order, 0) * 0.08s);
+}
+.orbit-landing.js-motion .flow-node:nth-of-type(1) {
+  --order: 0;
+}
+.orbit-landing.js-motion .flow-node:nth-of-type(2) {
+  --order: 1;
+}
+.orbit-landing.js-motion .flow-node:nth-of-type(3) {
+  --order: 2;
+}
+.orbit-landing.js-motion .flow-node:nth-of-type(4) {
+  --order: 3;
+}
+.orbit-landing.js-motion .flow-node:nth-of-type(5) {
+  --order: 4;
+}
+.orbit-landing:not(.enhanced) .player-controls {
+  display: none;
+}

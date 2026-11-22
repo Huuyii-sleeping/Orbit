@@ -1,0 +1,66 @@
+/* 仅首页启用文档滚动，离开时由组件清理；工作台继续使用原来的固定高度布局。 */
+html.orbit-landing-active,
+html.orbit-landing-active body,
+html.orbit-landing-active #root {
+  height: auto;
+  min-height: 100%;
+  overflow: visible;
+  background: #fff;
+  color-scheme: light;
+}
+html.orbit-landing-active {
+  overflow-x: clip;
+  scroll-behavior: smooth;
+  scroll-padding-top: 96px;
+}
+.orbit-landing {
+  width: 100%;
+  min-height: 100vh;
+  overflow-x: clip;
+}
+.orbit-landing *,
+.orbit-landing *::before,
+.orbit-landing *::after {
+  box-sizing: border-box;
+}
+.orbit-landing .button {
+  text-decoration: none;
+}
+.orbit-landing .brand-mark {
+  padding: 0;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+  box-shadow: none;
+  color: var(--ink);
+}
+.orbit-landing .nav {
+  width: 100%;
+}
+.orbit-landing .run-player {
+  scroll-margin-top: 96px;
+}
+.orbit-landing .hero-canvas {
+  align-items: start;
+  min-height: 0;
+  padding-top: 32px;
+}
+@media (max-width: 760px) {
+  .orbit-landing .hero-canvas {
+    padding-top: 24px;
+  }
+}
+.orbit-landing .flow-node {
+  font-family: var(--body);
+}
+.orbit-landing .panel-heading .chip {
+  font-weight: 400;
+}
+.orbit-landing .player-controls {
+  display: flex;
+}
+@media (prefers-reduced-motion: reduce) {
+  html.orbit-landing-active {
+    scroll-behavior: auto;
+  }
+}
