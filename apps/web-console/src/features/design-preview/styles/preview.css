@@ -47,7 +47,7 @@
 .design-lab .workspace-select { display: flex; align-items: center; gap: 10px; padding: 4px 7px 22px; text-align: left; font-size: 14px; font-weight: 600; }
 .workspace-select > svg { margin-left: auto; color: var(--p-muted); }
 .workspace-select small { display: block; font-size: 10px; font-weight: 400; color: var(--p-muted); margin-top: 2px; }
-.workspace-monogram { width: 29px; height: 29px; background: #414b59; color: #fff; display: grid; place-items: center; border-radius: 7px; font-size: 26px; font-weight: 400; line-height: 1; padding-bottom: 4px; }
+.workspace-monogram { width: 29px; height: 29px; background: #414b59; color: #fff; display: grid; place-items: center; border-radius: 7px; }
 .design-lab .sidebar-search { display: flex; align-items: center; gap: 9px; border: 1px solid var(--p-line); border-radius: 5px; padding: 7px 8px; margin: 0 5px 27px; color: var(--p-muted); font-size: 11px; background: var(--p-bg); }
 .sidebar-search kbd { margin-left: auto; font-family: inherit; font-size: 12px; }
 .sidebar-label { color: var(--p-muted); font-size: 10px; padding: 0 9px; margin-bottom: 8px; }

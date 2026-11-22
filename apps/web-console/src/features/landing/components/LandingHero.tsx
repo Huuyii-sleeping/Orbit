@@ -1,4 +1,5 @@
 import type { CSSProperties } from "react";
+import { BrandMark } from "../../../components/BrandMark";
 
 /** A 版落地页的首屏产品画布。 */
 export function LandingHero() {
@@ -45,7 +46,7 @@ export function LandingHero() {
         <div className="app-window ">
           <div className="window-bar">
             <span className="window-name">
-              <span className="tiny-logo">{"◎"}</span>
+              <span className="tiny-logo" aria-hidden="true"><BrandMark size={20} /></span>
               {" feedback-notes "}
               <span className="muted">{"/"}</span>
               {" 工作流"}

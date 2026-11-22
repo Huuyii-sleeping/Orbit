@@ -1,3 +1,5 @@
+import { BrandMark } from "../../../components/BrandMark";
+
 /** A 版落地页的页内导航。 */
 export function LandingNavigation() {
   return (
@@ -5,10 +7,7 @@ export function LandingNavigation() {
       <div className="container nav-inner">
         <a className="brand" href="#main">
           <span className="brand-mark" aria-hidden="true">
-            <svg viewBox="0 0 24 24">
-              <circle cx="12" cy="12" r="8" />
-              <circle className="orbit-point" cx="17.65" cy="6.35" r="3" />
-            </svg>
+            <BrandMark size={26} />
           </span>
           <span>{"Orbit"}</span>
         </a>

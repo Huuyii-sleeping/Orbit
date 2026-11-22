@@ -22,7 +22,8 @@
   white-space: nowrap;
 }
 .orbit-landing .tiny-logo {
-  font-size: 20px;
+  display: inline-flex;
+  align-items: center;
 }
 .orbit-landing .version-chips {
   display: flex;

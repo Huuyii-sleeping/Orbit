@@ -1,4 +1,5 @@
 import { ErrorNotice } from "../../feedback/ErrorNotice";
+import { BrandMark } from "../../BrandMark";
 import type { FormEvent, KeyboardEvent, RefObject } from "react";
 import { SendHorizontal } from "lucide-react";
 import type { AgentProfile, ChatMessage, HealthStatus, SessionDetail } from "../../../api";
@@ -114,7 +115,7 @@ export function ChatView({
 
               return (
                 <div className="msg" key={`${message.role}-${index}`}>
-                  <div className={av.cls}>{av.text}</div>
+                  <div className={av.cls}>{av.name === "Orbit" ? <BrandMark size={18} aria-hidden="true" /> : av.text}</div>
                   <div className="msg-body">
                     <div className="msg-name">
                       {av.name}

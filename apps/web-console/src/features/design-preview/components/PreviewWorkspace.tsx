@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { BrandMark } from "../../../components/BrandMark";
 import {
   ChevronDown,
   ChevronsUpDown,
@@ -54,7 +55,7 @@ export function PreviewWorkspace({
           className="workspace-select"
           onClick={() => setNotice("当前为个人空间。此页面为独立设计预览。 ")}
         >
-          <span className="workspace-monogram">o</span>
+          <span className="workspace-monogram" aria-hidden="true"><BrandMark size={21} /></span>
           <span>
             Orbit<small>个人工作空间</small>
           </span>
