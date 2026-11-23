@@ -56,6 +56,8 @@ export class SqliteWorkflowRunsRepository implements WorkflowRunsRepository {
   saveRun(run: WorkflowRunSnapshot): void {
     this.cleanupExpired();
     this.storage.database.transaction(() => {
+      const current = this.storage.database.prepare("select status from workflow_runs where id = ?").get(run.id) as { status: string } | undefined;
+      if (current && ["succeeded", "failed", "cancelled"].includes(current.status) && current.status !== run.status) return;
       this.storage.database.prepare(`
         insert into workflow_runs(id, workflow_id, version_id, content_hash, mode, status, input_json, output_json, error_json, node_instances_json, child_runs_json, waiting_json, created_at, started_at, finished_at)
         values (@id, @workflowId, @versionId, @contentHash, @mode, @status, @inputs, @output, @error, @nodeInstances, @childRuns, @waiting, @createdAt, @startedAt, @finishedAt)
@@ -132,46 +134,27 @@ export class SqliteWorkflowRunsRepository implements WorkflowRunsRepository {
         values (?, ?, ?, ?, ?)
       `).run(event.runId, event.id, event.type, JSON.stringify(event), event.at);
       if (inserted.changes === 0) return false;
-      if (event.type === "run.status") {
-        this.storage.database.prepare("update workflow_runs set status = ?, error_json = coalesce(?, error_json), started_at = case when ? = 'running' then coalesce(started_at, ?) else started_at end, finished_at = case when ? in ('succeeded','failed','cancelled') then ? else finished_at end where id = ?")
-          .run(event.status, event.error ? JSON.stringify(event.error) : null, event.status, event.at, event.status, event.at, event.runId);
-      } else if (event.type === "run.output") {
-        this.storage.database.prepare("update workflow_runs set output_json = ? where id = ?").run(JSON.stringify(event.output), event.runId);
-      } else if (event.type === "node.status") {
-        this.storage.database.prepare(`
-          insert into workflow_node_runs(run_id, node_id, status, attempt, error_json, started_at, finished_at)
-          values (@runId, @nodeId, @status, @attempt, @error, @startedAt, @finishedAt)
-          on conflict(run_id, node_id) do update set
-            status = excluded.status,
-            attempt = excluded.attempt,
-            error_json = coalesce(excluded.error_json, workflow_node_runs.error_json),
-            started_at = coalesce(workflow_node_runs.started_at, excluded.started_at),
-            finished_at = coalesce(excluded.finished_at, workflow_node_runs.finished_at)
-        `).run({
-          runId: event.runId,
-          nodeId: event.nodeId,
-          status: event.status,
-          attempt: event.attempt,
-          error: event.error ? JSON.stringify(event.error) : null,
-          startedAt: event.status === "running" ? event.at : null,
-          finishedAt: ["succeeded", "failed", "skipped", "cancelled"].includes(event.status) ? event.at : null,
-        });
-      } else if (event.type === "node.output") {
-        this.storage.database.prepare("update workflow_node_runs set output_json = ? where run_id = ? and node_id = ?")
-          .run(JSON.stringify(event.output), event.runId, event.nodeId);
-      }
       const current = this.getRun(event.runId);
-      if (current) {
-        const projected = applyWorkflowRuntimeEventToSnapshot(current, event);
-        this.storage.database.prepare(`
-          update workflow_runs set node_instances_json = ?, child_runs_json = ?, waiting_json = ? where id = ?
-        `).run(
-          projected.nodeInstances === undefined ? null : JSON.stringify(projected.nodeInstances),
-          projected.childRuns === undefined ? null : JSON.stringify(projected.childRuns),
-          projected.waiting === undefined ? null : JSON.stringify(projected.waiting),
-          event.runId,
-        );
+      if (!current) return true;
+      const newer = this.storage.database.prepare("select event_json from workflow_events where run_id = ? and event_id > ?")
+        .all(event.runId, event.id) as Array<{ event_json: string }>;
+      const later = newer.map((row) => JSON.parse(row.event_json) as WorkflowRuntimeEvent);
+      const runState = (item: WorkflowRuntimeEvent) => item.type === "run.status" || item.type === "run.waiting";
+      if (runState(event) && (later.some(runState) || ["succeeded", "failed", "cancelled"].includes(current.status))) return true;
+      if (event.type === "run.output" && later.some((item) => item.type === "run.output")) return true;
+      // Runtime 已返回终态时，历史节点状态只归档，不覆盖权威快照。
+      if (event.type === "node.status" && ["succeeded", "failed", "cancelled"].includes(current.status)) return true;
+      let projected = applyWorkflowRuntimeEventToSnapshot(current, event);
+      if (event.type === "node.status" || event.type === "node.output") {
+        const nodeEvent = event;
+        const sameNode = later.filter((item) => (item.type === "node.status" || item.type === "node.output") && item.nodeId === nodeEvent.nodeId);
+        const sameField = sameNode.filter((item) => item.type === nodeEvent.type);
+        if (sameField.length > 0) projected = { ...projected, nodeRuns: current.nodeRuns };
+        if (sameField.some((item) => (item.type === "node.status" || item.type === "node.output") && item.instanceId === nodeEvent.instanceId)) {
+          projected = { ...projected, nodeInstances: current.nodeInstances, childRuns: current.childRuns };
+        }
       }
+      this.saveRun(projected);
       return true;
     })();
   }

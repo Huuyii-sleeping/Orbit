@@ -1,3 +1,4 @@
+import { compare, valid } from "semver";
 import { Inject, Injectable } from "@nestjs/common";
 import { LocalStoreService } from "../local-store.service.js";
 import type {
@@ -184,16 +185,18 @@ export class SkillInstallerService {
     return normalizeSkillStoreState(await this.localStore.readSection(skillStoreKey, defaultSkillStoreState()));
   }
 
-  /** Persists Skill Hub lifecycle state. */
-  async writeState(state: SkillStoreState): Promise<SkillStoreState> {
-    const installedSkills = normalizeInstallationRecords(state.installedSkills);
-    return this.localStore.writeSection(skillStoreKey, {
-      installedSkillIds: [...new Set(installedSkills.map((record) => record.skillId))],
-      installedSkills,
-      previousInstalledSkills: normalizeInstallationRecords(state.previousInstalledSkills),
-      auditEvents: normalizeAuditEvents(state.auditEvents),
-      downloadedSkillIds: [...new Set(state.downloadedSkillIds)],
-      customSkillIds: [...new Set(state.customSkillIds)],
+  private async updateState(update: (state: SkillStoreState) => SkillStoreState): Promise<SkillStoreState> {
+    return this.localStore.updateSection(skillStoreKey, defaultSkillStoreState(), (current) => {
+      const state = update(normalizeSkillStoreState(current));
+      const installedSkills = normalizeInstallationRecords(state.installedSkills);
+      return {
+        installedSkillIds: [...new Set(installedSkills.map((record) => record.skillId))],
+        installedSkills,
+        previousInstalledSkills: normalizeInstallationRecords(state.previousInstalledSkills),
+        auditEvents: normalizeAuditEvents(state.auditEvents),
+        downloadedSkillIds: [...new Set(state.downloadedSkillIds)],
+        customSkillIds: [...new Set(state.customSkillIds)],
+      };
     });
   }
 
@@ -204,7 +207,6 @@ export class SkillInstallerService {
 
   /** Appends a successful Skill lifecycle audit event. */
   async appendAuditEvent(action: SkillAuditAction, skill: SkillRegistryItem): Promise<SkillAuditEvent> {
-    const state = await this.readState();
     const at = Date.now();
     const event: SkillAuditEvent = {
       id: `${at}-${action}-${skill.id}`,
@@ -218,16 +220,15 @@ export class SkillInstallerService {
       status: skill.status,
       at,
     };
-    await this.writeState({
+    await this.updateState((state) => ({
       ...state,
       auditEvents: [event, ...state.auditEvents].slice(0, maxAuditEvents),
-    });
+    }));
     return event;
   }
 
   /** Appends a failed Skill lifecycle audit event. */
   async appendAuditFailure(action: SkillAuditAction, skillId: string, code: string, message: string): Promise<SkillAuditEvent> {
-    const state = await this.readState();
     const at = Date.now();
     const event: SkillAuditEvent = {
       id: `${at}-${action}-${skillId}-failed`,
@@ -241,10 +242,10 @@ export class SkillInstallerService {
       status: "invalid",
       at,
     };
-    await this.writeState({
+    await this.updateState((state) => ({
       ...state,
       auditEvents: [event, ...state.auditEvents].slice(0, maxAuditEvents),
-    });
+    }));
     return event;
   }
 
@@ -268,11 +269,10 @@ export class SkillInstallerService {
       return { ok: false, code: "SKILL_PACKAGE_INVALID", message: validated.errors.join("; ") };
     }
     await this.skillStore.writePackage("remote", validated.package);
-    const state = await this.readState();
-    await this.writeState({
+    await this.updateState((state) => ({
       ...state,
       downloadedSkillIds: [...new Set([...state.downloadedSkillIds, validated.package.manifest.id])],
-    });
+    }));
     return { ok: true };
   }
 
@@ -291,12 +291,11 @@ export class SkillInstallerService {
       return { ok: true, skillPackage: validated.package, publishedToRegistry: true };
     }
     await this.skillStore.writePackage("custom", validated.package);
-    const state = await this.readState();
-    await this.writeState({
+    await this.updateState((state) => ({
       ...state,
       customSkillIds: [...new Set([...state.customSkillIds, validated.package.manifest.id])],
       downloadedSkillIds: [...new Set([...state.downloadedSkillIds, validated.package.manifest.id])],
-    });
+    }));
     return { ok: true, skillPackage: validated.package };
   }
 
@@ -308,64 +307,50 @@ export class SkillInstallerService {
     if (!target) {
       return false;
     }
-    const state = await this.readState();
-    const previous = state.installedSkills.find((record) => record.skillId === skillId);
-    const nextRecord = installationRecordFromSkill(target);
-    const previousInstalledSkills =
-      previous && previous.version && previous.version !== nextRecord.version
-        ? replaceRecord(state.previousInstalledSkills, previous)
-        : state.previousInstalledSkills;
-    await this.writeState({
-      ...state,
-      installedSkills: replaceRecord(state.installedSkills, nextRecord),
-      previousInstalledSkills,
+    await this.updateState((state) => {
+      const previous = state.installedSkills.find((record) => record.skillId === skillId);
+      const nextRecord = installationRecordFromSkill(target);
+      const previousInstalledSkills =
+        previous && previous.version && previous.version !== nextRecord.version
+          ? replaceRecord(state.previousInstalledSkills, previous)
+          : state.previousInstalledSkills;
+      return {
+        ...state,
+        installedSkills: replaceRecord(state.installedSkills, nextRecord),
+        previousInstalledSkills,
+      };
     });
     return true;
   }
 
   /** Restores the previous installed version if that package is still local. */
   async rollbackSkill(skillId: string, localSkills: SkillRegistryItem[]): Promise<boolean> {
-    const state = await this.readState();
-    const current = state.installedSkills.find((record) => record.skillId === skillId);
-    const previous = state.previousInstalledSkills.find((record) => record.skillId === skillId);
-    if (!previous) {
-      return false;
-    }
-    const target = localSkills.find((skill) => skill.id === skillId && skill.version === previous.version && skill.status !== "available" && skill.status !== "invalid");
-    if (!target) {
-      return false;
-    }
-    await this.writeState({
-      ...state,
-      installedSkills: replaceRecord(state.installedSkills, {
-        ...previous,
-        sourceType: target.sourceType,
-        registrySource: target.registrySource,
-        installedAt: Date.now(),
-      }),
-      previousInstalledSkills: current && current.version ? replaceRecord(state.previousInstalledSkills, current) : state.previousInstalledSkills,
+    let rolledBack = false;
+    await this.updateState((state) => {
+      const current = state.installedSkills.find((record) => record.skillId === skillId);
+      const previous = state.previousInstalledSkills.find((record) => record.skillId === skillId);
+      if (!previous) return state;
+      const target = localSkills.find((skill) => skill.id === skillId && skill.version === previous.version && skill.status !== "available" && skill.status !== "invalid");
+      if (!target) return state;
+      rolledBack = true;
+      return {
+        ...state,
+        installedSkills: replaceRecord(state.installedSkills, { ...previous, sourceType: target.sourceType, registrySource: target.registrySource, installedAt: Date.now() }),
+        previousInstalledSkills: current?.version ? replaceRecord(state.previousInstalledSkills, current) : state.previousInstalledSkills,
+      };
     });
-    return true;
+    return rolledBack;
   }
 
   /** Removes an installed marker while keeping the package available locally. */
   async uninstallSkill(skillId: string): Promise<void> {
-    const state = await this.readState();
-    await this.writeState({
+    await this.updateState((state) => ({
       ...state,
       installedSkills: state.installedSkills.filter((record) => record.skillId !== skillId),
-    });
+    }));
   }
 }
 
 function compareVersion(left: string, right: string): number {
-  const leftParts = left.split(".").map((part) => Number(part) || 0);
-  const rightParts = right.split(".").map((part) => Number(part) || 0);
-  for (let index = 0; index < Math.max(leftParts.length, rightParts.length); index += 1) {
-    const diff = (leftParts[index] ?? 0) - (rightParts[index] ?? 0);
-    if (diff !== 0) {
-      return diff;
-    }
-  }
-  return 0;
+  return compare(valid(left) ?? "0.0.0", valid(right) ?? "0.0.0");
 }

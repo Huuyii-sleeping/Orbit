@@ -59,6 +59,7 @@ function runFrom(body: Record<string, unknown>, id: string) {
 async function startMockAgent(): Promise<string> {
   let sequence = 0;
   const runs = new Map<string, ReturnType<typeof runFrom>>();
+  const receipts = new Map<string, string>();
   return listen(createServer(async (req, res) => {
     const url = new URL(req.url ?? "/", "http://127.0.0.1");
     const body = req.method === "GET" ? {} : await readBody(req);
@@ -96,6 +97,13 @@ async function startMockAgent(): Promise<string> {
     const resume = url.pathname.match(/^\/workflow-runs\/([^/]+)\/resume$/);
     if (req.method === "POST" && resume) {
       const run = runs.get(resume[1])!;
+      const receipt = JSON.stringify({ interrupt: body.interrupt, resume_data: body.resume_data });
+      const previous = receipts.get(run.id);
+      if (previous && previous !== receipt) {
+        json(res, 409, { ok: false, error: { code: "WORKFLOW_RUN_RESUME_CONFLICT", message: "receipt conflict" } });
+        return;
+      }
+      receipts.set(run.id, receipt);
       run.status = "succeeded";
       Object.assign(run, { waiting: undefined, output: { decision: body.resume_data } });
       json(res, 200, { ok: true, run });
@@ -461,6 +469,20 @@ describe("workflow-runs API smoke", () => {
         idempotency_key: "decision-1",
       },
     });
+
+    const retry = await request(baseUrl, `/api/workflow-runs/${started.id}/resume`, "POST", {
+      interruptId: started.waiting.waiting.interruptId,
+      action: "approve",
+      data: { comment: "ok" },
+      idempotencyKey: "decision-1",
+    });
+    expect(retry.status).toBe(200);
+    await expect(retry.json()).resolves.toMatchObject({ data: { id: started.id, status: "succeeded" } });
+    const conflict = await request(baseUrl, `/api/workflow-runs/${started.id}/resume`, "POST", {
+      interruptId: started.waiting.waiting.interruptId,
+      action: "reject", data: {}, idempotencyKey: "decision-1",
+    });
+    expect(conflict.status).toBe(409);
 
     expect((await request(baseUrl, "/api/approvals")).status).toBe(404);
     expect((await request(baseUrl, "/api/approvals/approval-1")).status).toBe(404);

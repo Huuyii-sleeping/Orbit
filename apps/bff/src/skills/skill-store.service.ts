@@ -1,8 +1,9 @@
+import { writeSkillPackage } from "./skill-package-storage.js";
 import { Injectable } from "@nestjs/common";
 import { createHash } from "node:crypto";
 import { existsSync } from "node:fs";
-import { mkdir, readdir, readFile, writeFile } from "node:fs/promises";
-import { dirname, join, normalize, resolve } from "node:path";
+import { readdir, readFile } from "node:fs/promises";
+import { dirname, join, normalize } from "node:path";
 import type {
   RemoteSkillIndexItem,
   RemoteSkillRegistry,
@@ -21,6 +22,8 @@ export type SkillStoreOptions = {
   remoteRegistryUrl?: string;
   registryServiceUrl?: string;
   registryAdminToken?: string;
+  /** Registry HTTP 请求与响应体的总时限，默认 30 秒。 */
+  registryRequestTimeoutMs?: number;
 };
 
 export type StoredSkillPackage = ValidatedSkillPackage & {
@@ -91,15 +94,6 @@ function packageSha256(skillPackage: ValidatedSkillPackage): string {
   );
 }
 
-function safePackagePath(root: string, file: SkillPackageFile): string {
-  const target = resolve(root, file.path);
-  const resolvedRoot = resolve(root);
-  if (target !== resolvedRoot && !target.startsWith(`${resolvedRoot}/`)) {
-    throw new Error(`unsafe package path: ${file.path}`);
-  }
-  return target;
-}
-
 /** Reads and writes skill packages across builtin, downloaded remote, and custom stores. */
 @Injectable()
 export class SkillStoreService {
@@ -108,6 +102,7 @@ export class SkillStoreService {
   private readonly remoteRegistryUrl: string;
   private readonly registryServiceUrl?: string;
   private readonly registryAdminToken?: string;
+  private readonly registryRequestTimeoutMs: number;
 
   constructor(
     private readonly validator: SkillValidatorService,
@@ -117,6 +112,8 @@ export class SkillStoreService {
     this.skillDataRoot = options.skillDataRoot ?? defaultSkillDataRoot();
     this.registryServiceUrl = options.registryServiceUrl?.replace(/\/+$/, "");
     this.registryAdminToken = options.registryAdminToken?.trim();
+    this.registryRequestTimeoutMs = options.registryRequestTimeoutMs ?? 30_000;
+    if (!Number.isSafeInteger(this.registryRequestTimeoutMs) || this.registryRequestTimeoutMs < 1) throw new Error("invalid registry request timeout");
     this.remoteRegistryUrl = options.remoteRegistryUrl ?? (this.registryServiceUrl ? `${this.registryServiceUrl}/skills` : defaultRemoteRegistryUrl());
   }
 
@@ -186,6 +183,7 @@ export class SkillStoreService {
     }
     const response = await fetch(`${this.registryServiceUrl}/admin/publish`, {
       method: "POST",
+      signal: AbortSignal.timeout(this.registryRequestTimeoutMs),
       headers: {
         "Content-Type": "application/json",
         ...(this.registryAdminToken ? { Authorization: `Bearer ${this.registryAdminToken}` } : {}),
@@ -207,13 +205,7 @@ export class SkillStoreService {
 
   /** Writes a validated package to the local downloaded/custom store. */
   async writePackage(sourceType: "remote" | "custom", skillPackage: ValidatedSkillPackage): Promise<void> {
-    const packageRoot = join(this.skillDataRoot, sourceType, skillPackage.manifest.id, skillPackage.manifest.version);
-    await mkdir(packageRoot, { recursive: true });
-    for (const file of skillPackage.files) {
-      const target = safePackagePath(packageRoot, file);
-      await mkdir(dirname(target), { recursive: true });
-      await writeFile(target, file.content, "utf8");
-    }
+    await writeSkillPackage(this.skillDataRoot, sourceType, skillPackage);
   }
 
   private async readSkillDirectories(root: string, sourceType: SkillSourceType): Promise<StoredSkillPackage[]> {
@@ -248,7 +240,7 @@ export class SkillStoreService {
     for (const skillEntry of skillEntries.filter((entry) => entry.isDirectory())) {
       const skillRoot = join(root, skillEntry.name);
       const versionEntries = await readdir(skillRoot, { withFileTypes: true });
-      for (const versionEntry of versionEntries.filter((entry) => entry.isDirectory())) {
+      for (const versionEntry of versionEntries.filter((entry) => entry.isDirectory() && !entry.name.startsWith("."))) {
         const skillPackage = await this.readPackageAt(join(skillRoot, versionEntry.name), sourceType);
         if (skillPackage) {
           packages.push(skillPackage);
@@ -276,7 +268,7 @@ export class SkillStoreService {
 
   private async readText(location: string, method = "GET"): Promise<string> {
     if (isHttpUrl(location)) {
-      const response = await fetch(location, { method });
+      const response = await fetch(location, { method, signal: AbortSignal.timeout(this.registryRequestTimeoutMs) });
       if (!response.ok) {
         throw new Error(`failed to fetch ${location}: ${response.status}`);
       }

@@ -16,6 +16,8 @@ export type AgentSkillBinding = {
 /** User-managed agent profile persisted by the BFF business store. */
 export type AgentProfile = {
   id: string;
+  /** 编辑并发控制版本；旧数据从 0 开始。 */
+  revision: number;
   avatarId: string;
   name: string;
   description: string;
@@ -44,9 +46,22 @@ export class AgentSkillBindingValidationError extends Error {
   }
 }
 
+/** 草稿已被其他请求修改，调用方应重新读取后编辑。 */
+export class AgentRevisionConflictError extends Error {
+  readonly code = "AGENT_REVISION_CONFLICT";
+  constructor() { super("agent revision conflict; reload the latest draft"); }
+}
+
+/** 编辑请求必须携带有效的非负整数 revision。 */
+export class AgentRevisionInputError extends Error {
+  readonly code = "AGENT_REVISION_INVALID";
+  constructor() { super("revision must be a non-negative integer"); }
+}
+
 const AGENTS_STORE_KEY = "agents";
 
 const defaultAgentProfile: Omit<AgentProfile, "id" | "createdAt" | "updatedAt"> = {
+  revision: 0,
   avatarId: "brain",
   name: "本地研发 Agent",
   description: "面向代码、文档和自动化执行的本地 agent。",
@@ -180,6 +195,7 @@ export function normalizeAgentProfile(value: unknown, fallbackId: string = rando
   const skills = cleanAgentSkillBindings(record.skills, legacySkillIds);
   return {
     id,
+    revision: Number.isSafeInteger(record.revision) && Number(record.revision) >= 0 ? Number(record.revision) : 0,
     avatarId: cleanAvatarId(record.avatarId),
     name: cleanText(record.name, defaultAgentProfile.name, 36),
     description: cleanOptionalText(record.description, 140) || defaultAgentProfile.description,
@@ -198,7 +214,7 @@ export function normalizeAgentProfile(value: unknown, fallbackId: string = rando
 export class AgentProfileService {
   constructor(
     @Inject(LocalStoreService) private readonly store: LocalStoreService,
-    @Inject(SkillRegistryService) private readonly skillRegistryService: SkillRegistryService,
+    @Inject(SkillRegistryService) private readonly skillRegistryService: Pick<SkillRegistryService, "listSkills">,
   ) {}
 
   /** Lists user-managed agent profiles from newest update to oldest. */
@@ -217,15 +233,14 @@ export class AgentProfileService {
     const now = Date.now();
     const inputRecord = asRecord(input);
     const agent = normalizeAgentProfile(
-      { ...mergeAgentProfileInput(defaultAgentProfile, input), id: randomUUID(), createdAt: now, updatedAt: now },
+      { ...mergeAgentProfileInput(defaultAgentProfile, input), id: randomUUID(), revision: 0, createdAt: now, updatedAt: now },
       randomUUID(),
       now,
     );
     const validated = await this.validateAgentSkillBindings(agent, {
       dropUnavailable: !Array.isArray(inputRecord.skillIds) && !Array.isArray(inputRecord.skills),
     });
-    const agents = await this.readAgents();
-    await this.writeAgents([validated, ...agents]);
+    await this.store.updateSection<AgentProfile[]>(AGENTS_STORE_KEY, [], (agents) => [validated, ...agents]);
     return validated;
   }
 
@@ -236,10 +251,16 @@ export class AgentProfileService {
     if (!current) {
       return null;
     }
+    const requestedRevision = asRecord(input).revision;
+    if (requestedRevision !== undefined && (!Number.isSafeInteger(requestedRevision) || Number(requestedRevision) < 0)) {
+      throw new AgentRevisionInputError();
+    }
+    if (requestedRevision !== undefined && requestedRevision !== current.revision) throw new AgentRevisionConflictError();
     const updated = normalizeAgentProfile(
       {
         ...mergeAgentProfileInput(current, input),
         id: current.id,
+        revision: current.revision + 1,
         createdAt: current.createdAt,
         updatedAt: Date.now(),
       },
@@ -247,19 +268,23 @@ export class AgentProfileService {
       current.createdAt,
     );
     const validated = await this.validateAgentSkillBindings(updated);
-    await this.writeAgents(agents.map((agent) => (agent.id === agentId ? validated : agent)));
+    await this.store.updateSection<AgentProfile[]>(AGENTS_STORE_KEY, [], (latest) => {
+      const persisted = latest.find((agent) => agent.id === agentId);
+      if (!persisted || normalizeAgentProfile(persisted).revision !== current.revision) throw new AgentRevisionConflictError();
+      return latest.map((agent) => agent.id === agentId ? validated : agent);
+    });
     return validated;
   }
 
   /** Deletes an existing agent profile and reports whether a record was removed. */
   async deleteAgent(agentId: string): Promise<boolean> {
-    const agents = await this.readAgents();
-    const nextAgents = agents.filter((agent) => agent.id !== agentId);
-    if (nextAgents.length === agents.length) {
-      return false;
-    }
-    await this.writeAgents(nextAgents);
-    return true;
+    let deleted = false;
+    await this.store.updateSection<AgentProfile[]>(AGENTS_STORE_KEY, [], (agents) => {
+      const next = agents.filter((agent) => agent.id !== agentId);
+      deleted = next.length !== agents.length;
+      return next;
+    });
+    return deleted;
   }
 
   private async readAgents(): Promise<AgentProfile[]> {
@@ -270,10 +295,6 @@ export class AgentProfileService {
     return value
       .map((item) => normalizeAgentProfile(item))
       .filter((agent, index, agents) => agents.findIndex((candidate) => candidate.id === agent.id) === index);
-  }
-
-  private async writeAgents(agents: AgentProfile[]): Promise<AgentProfile[]> {
-    return this.store.writeSection(AGENTS_STORE_KEY, agents);
   }
 
   private async validateAgentSkillBindings(

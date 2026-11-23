@@ -34,7 +34,11 @@ export function resolveSkillRegistryServiceUrl(env: NodeJS.ProcessEnv = process.
 
 /** Resolve the bearer token used by BFF for Skill Registry admin publish calls. */
 export function resolveSkillRegistryAdminToken(env: NodeJS.ProcessEnv = process.env): string {
-  return env.SKILL_REGISTRY_ADMIN_TOKEN?.trim() || DEFAULT_SKILL_REGISTRY_ADMIN_TOKEN;
+  const token = env.SKILL_REGISTRY_ADMIN_TOKEN?.trim() || DEFAULT_SKILL_REGISTRY_ADMIN_TOKEN;
+  if (env.NODE_ENV === "production" && token === DEFAULT_SKILL_REGISTRY_ADMIN_TOKEN) {
+    throw new Error("SKILL_REGISTRY_ADMIN_TOKEN must be configured for production");
+  }
+  return token;
 }
 
 /** Resolve the shared local package root used by BFF writes and Agent runtime reads. */

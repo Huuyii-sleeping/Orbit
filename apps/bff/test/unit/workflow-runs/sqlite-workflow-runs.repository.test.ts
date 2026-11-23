@@ -62,6 +62,34 @@ describe("SqliteWorkflowRunsRepository", () => {
     }
   });
 
+  it("乱序与重放事件不会让终态回退，也不会丢弃其他节点的迟到事件", async () => {
+    const { database, repository } = await createRepository();
+    try {
+      repository.saveRun(queuedRun());
+      repository.saveEvent({ id: 5, runId: "run-1", at: 40, type: "node.status", nodeId: "node1", status: "succeeded", attempt: 1 });
+      repository.saveEvent({ id: 3, runId: "run-1", at: 30, type: "node.status", nodeId: "node1", status: "running", attempt: 1 });
+      repository.saveEvent({ id: 4, runId: "run-1", at: 35, type: "node.status", nodeId: "node2", status: "succeeded", attempt: 1 });
+      repository.saveEvent({ id: 8, runId: "run-1", at: 50, type: "run.status", status: "succeeded" });
+      repository.saveEvent({ id: 1, runId: "run-1", at: 20, type: "run.status", status: "running" });
+      repository.saveEvent({ id: 2, runId: "run-1", at: 25, type: "run.waiting", nodeId: "approval", reason: "old wait" });
+      expect(repository.getRun("run-1")).toMatchObject({ status: "succeeded", nodeRuns: { node1: { status: "succeeded" }, node2: { status: "succeeded" } } });
+      expect(repository.getRun("run-1")?.waiting).toBeUndefined();
+      expect(repository.listEvents("run-1").map((event) => event.id)).toEqual([1, 2, 3, 4, 5, 8]);
+      repository.saveRun(queuedRun());
+      expect(repository.getRun("run-1")?.status).toBe("succeeded");
+    } finally { database.onModuleDestroy(); }
+  });
+
+  it("先查询到终态快照再补拉旧事件时，节点终态不回退", async () => {
+    const { database, repository } = await createRepository();
+    try {
+      repository.saveRun({ ...queuedRun(), status: "succeeded", finishedAt: 40, nodeRuns: { node1: { nodeId: "node1", status: "succeeded", attempt: 1 } } });
+      repository.saveEvent({ id: 1, runId: "run-1", at: 20, type: "node.status", nodeId: "node1", status: "running", attempt: 1 });
+      expect(repository.getRun("run-1")).toMatchObject({ status: "succeeded", nodeRuns: { node1: { status: "succeeded" } } });
+      expect(repository.listEvents("run-1")).toHaveLength(1);
+    } finally { database.onModuleDestroy(); }
+  });
+
   it("waiting 恢复窗口内保留技术状态，terminal retention 到期后按 run 级联清理", async () => {
     const { database, repository } = await createRepository();
     try {

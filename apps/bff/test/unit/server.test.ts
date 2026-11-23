@@ -707,6 +707,7 @@ describe("bff server", () => {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           ...createdAgent,
+          revision: 1,
           skills: [{ skillId: "memory-context", version: "0.7.0", sourceType: "builtin", registrySource: "local" }],
         }),
       }),
@@ -721,6 +722,7 @@ describe("bff server", () => {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           ...createdAgent,
+          revision: 1,
           skills: [{ skillId: "not-installed", version: "1.0.0", sourceType: "builtin", registrySource: "local" }],
         }),
       }),
@@ -741,6 +743,7 @@ describe("bff server", () => {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           ...createdAgent,
+          revision: 1,
           skills: [{ skillId: "memory-context", version: "0.8.0", sourceType: "remote", registrySource: "local" }],
         }),
       }),
@@ -761,6 +764,7 @@ describe("bff server", () => {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           ...createdAgent,
+          revision: 1,
           skills: [{ skillId: "memory-context", version: "0.8.0", sourceType: "builtin", registrySource: "official" }],
         }),
       }),

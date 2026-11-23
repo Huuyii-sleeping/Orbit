@@ -1,4 +1,5 @@
-import { mkdtemp, rm, writeFile } from "node:fs/promises";
+import Database from "better-sqlite3";
+import { mkdir, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
@@ -60,6 +61,48 @@ describe("SopDatabase", () => {
     const dataRoot = await root();
     await writeFile(join(dataRoot, "workflows.sqlite"), "not-a-sqlite-database", "utf8");
     expect(() => new SopDatabase({ sopDataRoot: dataRoot })).toThrow(/无法打开 SOP SQLite 数据库|完整性检查失败/);
+  });
+
+  it("无效备份在替换前拒绝，原数据库保持可读写", async () => {
+    const database = new SopDatabase({ sopDataRoot: await root() });
+    const repository = new SqliteSopsRepository(database);
+    try {
+      const draft = repository.createDraft(createTestDraft());
+      await mkdir(database.backupRoot, { recursive: true });
+      await writeFile(join(database.backupRoot, "invalid.sqlite"), "broken backup");
+      await expect(database.restore("invalid.sqlite")).rejects.toThrow();
+      expect(repository.getDraft(draft.id)?.name).toBe(draft.name);
+      expect(repository.updateDraft(draft.id, 0, { ...draft, name: "仍可保存" }).name).toBe("仍可保存");
+    } finally { database.onModuleDestroy(); }
+  });
+
+  it("SQLite 完整但缺少业务表的备份不能替换原库", async () => {
+    const database = new SopDatabase({ sopDataRoot: await root() });
+    const repository = new SqliteSopsRepository(database);
+    try {
+      const draft = repository.createDraft(createTestDraft());
+      const fileName = await database.backup("schema");
+      const broken = new Database(join(database.backupRoot, fileName));
+      try { broken.exec("drop table sop_drafts"); } finally { broken.close(); }
+      await expect(database.restore(fileName)).rejects.toThrow();
+      expect(repository.getDraft(draft.id)?.name).toBe(draft.name);
+    } finally { database.onModuleDestroy(); }
+  });
+
+  it("离线恢复可修复损坏的主库，无效备份不会替换损坏原件", async () => {
+    const dataRoot = await root();
+    const database = new SopDatabase({ sopDataRoot: dataRoot });
+    const draft = new SqliteSopsRepository(database).createDraft(createTestDraft());
+    const fileName = await database.backup("offline");
+    database.onModuleDestroy();
+    await writeFile(join(dataRoot, "workflows.sqlite"), "corrupt original");
+    await writeFile(join(dataRoot, "backups/invalid.sqlite"), "invalid backup");
+    await expect(SopDatabase.restoreOffline({ sopDataRoot: dataRoot }, "invalid.sqlite")).rejects.toThrow();
+    expect(await readFile(join(dataRoot, "workflows.sqlite"), "utf8")).toBe("corrupt original");
+    await SopDatabase.restoreOffline({ sopDataRoot: dataRoot }, fileName);
+    const restored = new SopDatabase({ sopDataRoot: dataRoot });
+    try { expect(new SqliteSopsRepository(restored).getDraft(draft.id)?.name).toBe(draft.name); }
+    finally { restored.onModuleDestroy(); }
   });
 
   it("关闭并重新打开数据库后仍保留草稿", async () => {

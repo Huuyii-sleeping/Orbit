@@ -1,8 +1,9 @@
+import { replaceSopBackup } from "./sop-backup.js";
 import { Injectable, type OnModuleDestroy } from "@nestjs/common";
 import Database from "better-sqlite3";
 import { mkdirSync } from "node:fs";
-import { copyFile, mkdir, rename, rm } from "node:fs/promises";
-import { basename, dirname, join } from "node:path";
+import { mkdir } from "node:fs/promises";
+import { dirname, join } from "node:path";
 import { SopStorageError } from "./sops.errors.js";
 import type { SopStorageHealth } from "./sops.types.js";
 
@@ -24,6 +25,7 @@ export class SopDatabase implements OnModuleDestroy {
   readonly databasePath: string;
   readonly backupRoot: string;
   private connection: Database.Database;
+  private restoring = false;
 
   constructor(options: SopDatabaseOptions = {}) {
     const dataRoot = options.sopDataRoot ?? join(process.cwd(), ".data", "sops");
@@ -63,23 +65,47 @@ export class SopDatabase implements OnModuleDestroy {
 
   /** 只允许从受控备份目录恢复，并使用临时文件原子替换数据库。 */
   async restore(fileName: string): Promise<void> {
-    if (this.databasePath === ":memory:") throw new SopStorageError("内存数据库不支持恢复。 ");
-    if (!fileName || basename(fileName) !== fileName) throw new SopStorageError("备份文件名无效。 ");
-    const source = join(this.backupRoot, fileName);
-    const temporary = `${this.databasePath}.restore-tmp`;
-    await copyFile(source, temporary).catch((error: unknown) => {
-      throw new SopStorageError("无法读取指定的 SOP 备份文件。", { fileName, cause: String(error) });
-    });
-    this.connection.close();
+    if (this.restoring) throw new SopStorageError("SOP 数据库正在恢复中。");
+    this.restoring = true;
     try {
-      await rm(`${this.databasePath}-wal`, { force: true });
-      await rm(`${this.databasePath}-shm`, { force: true });
-      await rename(temporary, this.databasePath);
-      this.connection = this.open();
-    } catch (error) {
-      await rm(temporary, { force: true });
-      throw new SopStorageError("SOP 数据库恢复失败。", { fileName, cause: String(error) });
+      await replaceSopBackup({
+        databasePath: this.databasePath, backupRoot: this.backupRoot, fileName,
+        validate: (path) => SopDatabase.validateBackup(path),
+        beforeReplace: () => { this.connection.pragma("wal_checkpoint(TRUNCATE)"); this.connection.close(); },
+        afterReplace: () => { this.connection = this.open(); },
+      });
+    } finally { this.restoring = false; }
+  }
+
+  /** 离线修复入口，可用于原数据库已经损坏的情况；调用前必须停止 BFF。 */
+  static async restoreOffline(options: SopDatabaseOptions, fileName: string): Promise<void> {
+    const dataRoot = options.sopDataRoot ?? join(process.cwd(), ".data", "sops");
+    await mkdir(dataRoot, { recursive: true });
+    await replaceSopBackup({
+      databasePath: options.sopDatabasePath ?? join(dataRoot, "workflows.sqlite"),
+      backupRoot: join(dataRoot, "backups"), fileName,
+      validate: (path) => SopDatabase.validateBackup(path),
+    });
+  }
+
+  private static validateBackup(path: string): void {
+    const candidate = new SopDatabase({ sopDatabasePath: path });
+    try {
+      // integrity_check 只验证 SQLite 结构；迁移号正确但业务表缺失也必须拒绝。
+      const requiredSchema = [
+        "select id, revision, schema_version, name, summary, content_json, created_at, updated_at from sop_drafts limit 0",
+        "select id, workflow_id, version, schema_version, content_hash, created_by, release_notes, content_json, created_at from sop_versions limit 0",
+        "select id, version, name, summary, source_workflow_id, source_version_id, parameter_schema_json, content_json, created_at, updated_at from sop_templates limit 0",
+        "select id, workflow_id, version_id, content_hash, mode, status, input_json, output_json, error_json, node_instances_json, child_runs_json, waiting_json, created_at, started_at, finished_at from workflow_runs limit 0",
+        "select run_id, node_id, status, attempt, input_json, output_json, error_json, started_at, finished_at, duration_ms from workflow_node_runs limit 0",
+        "select run_id, event_id, type, event_json, created_at from workflow_events limit 0",
+        "select id, agent_profile_id, version, content_hash, name, description, snapshot_json, created_by, release_notes, created_at from agent_versions limit 0",
+      ];
+      for (const sql of requiredSchema) candidate.database.prepare(sql).all();
+      if (candidate.database.prepare("PRAGMA foreign_key_check").all().length > 0) throw new SopStorageError("备份包含不完整的外键引用。");
+      candidate.database.pragma("wal_checkpoint(TRUNCATE)");
     }
+    finally { candidate.onModuleDestroy(); }
   }
 
   onModuleDestroy(): void {
@@ -87,9 +113,10 @@ export class SopDatabase implements OnModuleDestroy {
   }
 
   private open(): Database.Database {
+    let database: Database.Database | undefined;
     try {
       if (this.databasePath !== ":memory:") mkdirSync(dirname(this.databasePath), { recursive: true });
-      const database = new Database(this.databasePath);
+      database = new Database(this.databasePath);
       database.pragma("foreign_keys = ON");
       database.pragma("busy_timeout = 5000");
       database.pragma("synchronous = NORMAL");
@@ -98,6 +125,7 @@ export class SopDatabase implements OnModuleDestroy {
       this.migrate(database);
       return database;
     } catch (error) {
+      if (database?.open) database.close();
       if (error instanceof SopStorageError) throw error;
       throw new SopStorageError("无法打开 SOP SQLite 数据库；请检查文件权限或从备份恢复。", {
         databasePath: this.databasePath,

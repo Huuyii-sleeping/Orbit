@@ -1,3 +1,4 @@
+import { writeStreamChunk } from "./stream-utils.js";
 import { Injectable } from "@nestjs/common";
 import type { IncomingMessage, ServerResponse } from "node:http";
 import { errorPayload, applyCommonHeaders, writeJson, type JsonObject } from "./http-utils.js";
@@ -9,6 +10,8 @@ export type ProxyResult =
 export type AgentProxyOptions = {
   agentBaseUrl: string;
   fetchImpl?: typeof fetch;
+  /** 普通请求总时限，以及 SSE 建连时限；不限制正常 SSE 的总时长。 */
+  requestTimeoutMs?: number;
 };
 
 function getObject(value: unknown): JsonObject {
@@ -23,10 +26,13 @@ function upstreamUrl(agentBaseUrl: string, pathname: string, search = ""): URL {
 export class AgentProxyService {
   private readonly agentBaseUrl: string;
   private readonly fetchImpl: typeof fetch;
+  private readonly requestTimeoutMs: number;
 
   constructor(options: AgentProxyOptions) {
     this.agentBaseUrl = options.agentBaseUrl;
     this.fetchImpl = options.fetchImpl ?? fetch;
+    this.requestTimeoutMs = options.requestTimeoutMs ?? 30_000;
+    if (!Number.isSafeInteger(this.requestTimeoutMs) || this.requestTimeoutMs < 1) throw new Error("invalid upstream request timeout");
   }
 
   async proxyJson(input: {
@@ -35,8 +41,11 @@ export class AgentProxyService {
     search?: string;
     body?: unknown;
   }): Promise<ProxyResult> {
+    const controller = new AbortController();
+    const timer = setTimeout(() => controller.abort(), this.requestTimeoutMs);
     try {
       const response = await this.fetchImpl(upstreamUrl(this.agentBaseUrl, input.pathname, input.search ?? ""), {
+        signal: controller.signal,
         method: input.method,
         headers: input.body === undefined ? undefined : { "Content-Type": "application/json" },
         body: input.body === undefined ? undefined : JSON.stringify(input.body),
@@ -47,10 +56,12 @@ export class AgentProxyService {
     } catch (error) {
       return {
         ok: false,
-        status: 502,
-        body: errorPayload("AGENT_UPSTREAM_UNAVAILABLE", error instanceof Error ? error.message : String(error)),
+        status: controller.signal.aborted ? 504 : 502,
+        body: controller.signal.aborted
+          ? errorPayload("AGENT_UPSTREAM_TIMEOUT", "Agent request exceeded the time limit")
+          : errorPayload("AGENT_UPSTREAM_UNAVAILABLE", error instanceof Error ? error.message : String(error)),
       };
-    }
+    } finally { clearTimeout(timer); }
   }
 
   async health(): Promise<ProxyResult> {
@@ -144,7 +155,7 @@ export class AgentProxyService {
   workflowEventStream(runId: string, search: string, lastEventId: string | undefined, signal: AbortSignal): Promise<Response> {
     const headers: HeadersInit = { Accept: "text/event-stream" };
     if (lastEventId) headers["Last-Event-ID"] = lastEventId;
-    return this.fetchImpl(upstreamUrl(this.agentBaseUrl, `/workflow-runs/${encodeURIComponent(runId)}/events`, search), {
+    return this.fetchStream(upstreamUrl(this.agentBaseUrl, `/workflow-runs/${encodeURIComponent(runId)}/events`, search), {
       method: "GET",
       headers,
       signal,
@@ -152,21 +163,26 @@ export class AgentProxyService {
   }
 
   async proxyEventStream(req: IncomingMessage, res: ServerResponse, search: string): Promise<void> {
+    const controller = new AbortController();
+    const close = () => controller.abort();
+    res.once("close", close);
     try {
       const headers: HeadersInit = {};
       const lastEventId = req.headers["last-event-id"];
       if (typeof lastEventId === "string") {
         headers["Last-Event-ID"] = lastEventId;
       }
-      const upstream = await this.fetchImpl(upstreamUrl(this.agentBaseUrl, "/events", search), {
+      const upstream = await this.fetchStream(upstreamUrl(this.agentBaseUrl, "/events", search), {
         method: "GET",
         headers,
+        signal: controller.signal,
       });
       applyCommonHeaders(res);
       res.statusCode = upstream.status;
       res.setHeader("Content-Type", upstream.headers.get("content-type") ?? "text/event-stream; charset=utf-8");
       await this.pipeWebStream(upstream, res);
     } catch (error) {
+      if (controller.signal.aborted || res.destroyed || res.writableEnded) return;
       if (res.headersSent) {
         res.end();
         return;
@@ -176,13 +192,17 @@ export class AgentProxyService {
         502,
         errorPayload("AGENT_UPSTREAM_UNAVAILABLE", error instanceof Error ? error.message : String(error)),
       );
-    }
+    } finally { res.off("close", close); controller.abort(); }
   }
 
   async proxyChatMessageStream(res: ServerResponse, sessionId: string, body: JsonObject): Promise<void> {
+    const controller = new AbortController();
+    const close = () => controller.abort();
+    res.once("close", close);
     try {
-      const upstream = await this.fetchImpl(upstreamUrl(this.agentBaseUrl, "/chat/stream"), {
+      const upstream = await this.fetchStream(upstreamUrl(this.agentBaseUrl, "/chat/stream"), {
         method: "POST",
+        signal: controller.signal,
         headers: {
           "Content-Type": "application/json",
           Accept: "text/event-stream",
@@ -201,6 +221,7 @@ export class AgentProxyService {
       res.flushHeaders?.();
       await this.pipeWebStream(upstream, res);
     } catch (error) {
+      if (controller.signal.aborted || res.destroyed || res.writableEnded) return;
       if (res.headersSent) {
         this.writeSseEvent(res, "message.error", {
           code: "AGENT_UPSTREAM_UNAVAILABLE",
@@ -214,7 +235,15 @@ export class AgentProxyService {
         502,
         errorPayload("AGENT_UPSTREAM_UNAVAILABLE", error instanceof Error ? error.message : String(error)),
       );
-    }
+    } finally { res.off("close", close); controller.abort(); }
+  }
+
+  private async fetchStream(url: URL, init: RequestInit): Promise<Response> {
+    const controller = new AbortController();
+    const timer = setTimeout(() => controller.abort(), this.requestTimeoutMs);
+    try {
+      return await this.fetchImpl(url, { ...init, signal: init.signal ? AbortSignal.any([init.signal, controller.signal]) : controller.signal });
+    } finally { clearTimeout(timer); }
   }
 
   private async pipeWebStream(upstream: Response, res: ServerResponse): Promise<void> {
@@ -229,12 +258,13 @@ export class AgentProxyService {
         if (done) {
           break;
         }
-        res.write(Buffer.from(value));
+        if (!await writeStreamChunk(res, value)) break;
       }
     } finally {
+      await reader.cancel().catch(() => undefined);
       reader.releaseLock();
-      res.end();
     }
+    res.end();
   }
 
   private writeSseEvent(res: ServerResponse, event: string, data: unknown): void {

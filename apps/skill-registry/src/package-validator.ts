@@ -1,3 +1,4 @@
+import { valid } from "semver";
 import type { SkillManifest, SkillMaturity, SkillPackageInput, SkillPackageVersion, SkillValidationResult } from "./types.js";
 
 const maxPackageFiles = 32;
@@ -175,7 +176,7 @@ export function validateSkillPackage(input: unknown): SkillValidationResult {
   }
   const metadataId = cleanText(metadata.id, "", 80);
   const name = cleanText(metadata.name, "", 80);
-  const version = cleanText(metadata.version, "", 40);
+  const version = typeof metadata.version === "string" ? metadata.version : "";
   const metadataPermissions = cleanStringList(metadata.permissions, 16, 40);
   if (permissionsFile) {
     validatePermissionCoverage(parsePermissionsFile(permissionsFile.content, errors), metadataPermissions, errors);
@@ -188,6 +189,8 @@ export function validateSkillPackage(input: unknown): SkillValidationResult {
   }
   if (!version) {
     errors.push("skill.json version is required");
+  } else if (version.length > 40 || valid(version) !== version.split("+")[0]) {
+    errors.push("skill.json version must be a canonical semantic version");
   }
   if (metadataId !== id) {
     errors.push("skill.json id must match SKILL.md frontmatter name");

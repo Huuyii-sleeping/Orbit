@@ -1,7 +1,9 @@
-import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
+import { rcompare } from "semver";
+import { storePackage } from "./registry/package-writer.js";
+import { existsSync, mkdirSync, readFileSync } from "node:fs";
 import { createRequire } from "node:module";
 import { dirname, join, normalize } from "node:path";
-import { packageDirectory, packageStoragePath, sha256Hex } from "./package-utils.js";
+import { sha256Hex } from "./package-utils.js";
 import { validateSkillPackage } from "./package-validator.js";
 import type {
   CreatePublisherInput,
@@ -29,17 +31,6 @@ const { DatabaseSync } = createRequire(import.meta.url)("node:sqlite") as { Data
 type SkillVersionRow = {
   skill_id: string;
   version: string;
-  name: string;
-  description: string;
-  summary: string;
-  category: string;
-  provider: string;
-  runtime: string;
-  permissions_json: string;
-  tags_json: string;
-  entry: string;
-  maturity: string;
-  updated_at: string;
   publisher_id: string;
   publisher_name: string;
   publisher_verified: number;
@@ -127,34 +118,6 @@ function resolvePackageUrl(packageUrl: string, registryUrl: string): string {
   return normalize(join(dirname(registryUrl), packageUrl));
 }
 
-function metadataFromPackage(skillPackage: SkillPackageInput): SkillManifest | null {
-  const metadataFile = skillPackage.files.find((file) => file.path === "skill.json");
-  if (!metadataFile) {
-    return null;
-  }
-  const record = asObject(JSON.parse(metadataFile.content) as unknown);
-  const id = cleanString(record.id, "", 80);
-  const version = cleanString(record.version, "", 40);
-  if (!id || !version) {
-    return null;
-  }
-  return {
-    id,
-    name: cleanString(record.name, id, 120),
-    description: cleanString(record.description, "", 1000),
-    summary: cleanString(record.summary, "暂无简介", 240),
-    category: cleanString(record.category, "未分类", 80),
-    provider: cleanString(record.provider, "Registry", 120),
-    version,
-    runtime: cleanString(record.runtime, "Skill runtime", 120),
-    permissions: cleanStringList(record.permissions),
-    updatedAt: cleanString(record.updatedAt, "", 40),
-    maturity: record.maturity === "beta" ? "beta" : "stable",
-    tags: cleanStringList(record.tags),
-    entry: cleanString(record.entry, "SKILL.md", 120),
-  };
-}
-
 function registryItemFromRow(row: SkillVersionRow, baseUrl: string): RegistrySkillVersion {
   const manifest = JSON.parse(row.manifest_json) as SkillManifest;
   return {
@@ -172,17 +135,17 @@ function registryItemFromRow(row: SkillVersionRow, baseUrl: string): RegistrySki
     rating: row.rating,
     deprecated: row.deprecated === 1,
     metadata: {
-      name: row.name,
-      description: row.description,
-      summary: row.summary,
-      category: row.category,
-      provider: row.provider,
-      runtime: row.runtime,
-      permissions: JSON.parse(row.permissions_json) as string[],
+      name: manifest.name,
+      description: manifest.description,
+      summary: manifest.summary,
+      category: manifest.category,
+      provider: manifest.provider,
+      runtime: manifest.runtime,
+      permissions: manifest.permissions,
       updatedAt: manifest.updatedAt,
-      maturity: row.maturity === "beta" ? "beta" : "stable",
-      tags: JSON.parse(row.tags_json) as string[],
-      entry: row.entry,
+      maturity: manifest.maturity,
+      tags: manifest.tags,
+      entry: manifest.entry,
     },
   };
 }
@@ -197,10 +160,11 @@ export class RegistryStore {
     mkdirSync(options.packageRoot, { recursive: true });
     this.db = new DatabaseSync(options.dbPath);
     this.packageRoot = options.packageRoot;
-    this.initializeSchema();
-    if (options.seedRegistryUrl) {
-      this.seedFromRegistry(options.seedRegistryUrl);
-    }
+    this.db.exec("PRAGMA busy_timeout = 5000; PRAGMA journal_mode = WAL; PRAGMA foreign_keys = ON; PRAGMA synchronous = FULL;");
+    try {
+      this.initializeSchema();
+      if (options.seedRegistryUrl) this.seedFromRegistry(options.seedRegistryUrl);
+    } catch (error) { this.db.close(); throw error; }
   }
 
   close(): void {
@@ -239,7 +203,7 @@ export class RegistryStore {
       return { ok: false, errors };
     }
     this.db
-      .prepare("INSERT OR REPLACE INTO publishers(id, name, verified) VALUES (?, ?, ?)")
+      .prepare("INSERT INTO publishers(id, name, verified) VALUES (?, ?, ?) ON CONFLICT(id) DO UPDATE SET name = excluded.name, verified = excluded.verified")
       .run(publisher.id, publisher.name, publisher.verified ? 1 : 0);
     return { ok: true, publisher };
   }
@@ -268,36 +232,36 @@ export class RegistryStore {
   }
 
   getSkill(skillId: string, baseUrl: string): RegistrySkillVersion | null {
-    const row = this.db.prepare(`${this.skillVersionSelectSql()} WHERE sv.skill_id = ? ORDER BY sv.version DESC LIMIT 1`).get(skillId) as
-      | SkillVersionRow
-      | undefined;
-    return row ? registryItemFromRow(row, baseUrl) : null;
+    return this.listVersions(skillId, baseUrl)[0] ?? null;
   }
 
   listVersions(skillId: string, baseUrl: string): RegistrySkillVersion[] {
     const rows = this.db
       .prepare(`${this.skillVersionSelectSql()} WHERE sv.skill_id = ? ORDER BY sv.version DESC`)
       .all(skillId) as SkillVersionRow[];
-    return rows.map((row) => registryItemFromRow(row, baseUrl));
+    return rows.map((row) => registryItemFromRow(row, baseUrl)).sort((left, right) => rcompare(left.version, right.version));
   }
 
   downloadPackage(skillId: string, version?: string): string | null {
-    const row = version
-      ? (this.db.prepare("SELECT package_path FROM skill_versions WHERE skill_id = ? AND version = ?").get(skillId, version) as
-          | { package_path: string }
-          | undefined)
-      : (this.db
-          .prepare("SELECT package_path FROM skill_versions WHERE skill_id = ? ORDER BY version DESC LIMIT 1")
-          .get(skillId) as { package_path: string } | undefined);
-    if (!row) {
-      return null;
-    }
+    const resolvedVersion = version ?? this.listVersions(skillId, "")[0]?.version;
+    if (!resolvedVersion) return null;
+    const row = this.db.prepare("SELECT package_path, package_sha256 FROM skill_versions WHERE skill_id = ? AND version = ?")
+      .get(skillId, resolvedVersion) as { package_path: string; package_sha256: string } | undefined;
+    if (!row) return null;
+    const raw = readFileSync(row.package_path, "utf8");
+    if (sha256Hex(raw) !== row.package_sha256) throw new Error("stored skill package checksum mismatch");
     const now = Date.now();
-    this.db
-      .prepare("UPDATE skill_versions SET download_count = download_count + 1, updated_at = ? WHERE package_path = ?")
-      .run(now, row.package_path);
-    this.db.prepare("INSERT INTO download_events(skill_id, version, created_at) VALUES (?, ?, ?)").run(skillId, version ?? "", now);
-    return readFileSync(row.package_path, "utf8");
+    this.db.exec("BEGIN IMMEDIATE");
+    try {
+      this.db.prepare("UPDATE skill_versions SET download_count = download_count + 1, updated_at = ? WHERE skill_id = ? AND version = ?")
+        .run(now, skillId, resolvedVersion);
+      this.db.prepare("INSERT INTO download_events(skill_id, version, created_at) VALUES (?, ?, ?)").run(skillId, resolvedVersion, now);
+      this.db.exec("COMMIT");
+    } catch (error) {
+      this.db.exec("ROLLBACK");
+      throw error;
+    }
+    return raw;
   }
 
   publishPackage(input: PublishSkillInput, baseUrl: string): SkillValidationResult | { ok: true; skill: RegistrySkillVersion } {
@@ -321,7 +285,7 @@ export class RegistryStore {
       rating: cleanRating(input.rating),
       downloads: 0,
     });
-    const skill = this.getSkill(validated.manifest.id, baseUrl);
+    const skill = this.listVersions(validated.manifest.id, baseUrl).find((item) => item.version === validated.manifest.version);
     if (!skill) {
       return { ok: false, errors: ["published skill was not found after storing"] };
     }
@@ -348,10 +312,10 @@ export class RegistryStore {
       }
       const packageRaw = readFileSync(packagePath, "utf8");
       const skillPackage = JSON.parse(packageRaw) as SkillPackageInput;
-      const packageManifest = metadataFromPackage(skillPackage);
-      if (!packageManifest) {
-        continue;
-      }
+      const validation = validateSkillPackage(skillPackage);
+      if (!validation.ok) throw new Error(`invalid seed package: ${packagePath}`);
+      const packageManifest = validation.manifest;
+      if (packageManifest.id !== skillId || packageManifest.version !== version) throw new Error("seed package identity mismatch");
       const metadata = asObject(entry.metadata);
       const manifest: SkillManifest = {
         ...packageManifest,
@@ -390,64 +354,7 @@ export class RegistryStore {
     rating: number | null;
     downloads: number;
   }): void {
-    const packagePath = packageStoragePath(this.packageRoot, input.manifest.id, input.manifest.version);
-    mkdirSync(packageDirectory(this.packageRoot, input.manifest.id, input.manifest.version), { recursive: true });
-    writeFileSync(packagePath, input.packageRaw, "utf8");
-    this.db.prepare("INSERT OR REPLACE INTO publishers(id, name, verified) VALUES (?, ?, ?)").run(
-      input.publisher.id,
-      input.publisher.name,
-      input.publisher.verified ? 1 : 0,
-    );
-    this.db
-      .prepare(
-        [
-          "INSERT OR REPLACE INTO skills(",
-          "id, name, description, summary, category, provider, runtime, permissions_json, tags_json, entry, maturity, created_at, updated_at",
-          ") VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, COALESCE((SELECT created_at FROM skills WHERE id = ?), ?), ?)",
-        ].join(""),
-      )
-      .run(
-        input.manifest.id,
-        input.manifest.name,
-        input.manifest.description,
-        input.manifest.summary,
-        input.manifest.category,
-        input.manifest.provider,
-        input.manifest.runtime,
-        JSON.stringify(input.manifest.permissions),
-        JSON.stringify(input.manifest.tags),
-        input.manifest.entry,
-        input.manifest.maturity,
-        input.manifest.id,
-        Date.now(),
-        Date.now(),
-      );
-    this.db
-      .prepare(
-        [
-          "INSERT OR REPLACE INTO skill_versions(",
-          "skill_id, version, publisher_id, source, package_sha256, deprecated, rating, download_count, package_path, manifest_json, created_at, updated_at",
-          ") VALUES (?, ?, ?, ?, ?, ?, ?, MAX(COALESCE((SELECT download_count FROM skill_versions WHERE skill_id = ? AND version = ?), 0), ?), ?, ?, COALESCE((SELECT created_at FROM skill_versions WHERE skill_id = ? AND version = ?), ?), ?)",
-        ].join(""),
-      )
-      .run(
-        input.manifest.id,
-        input.manifest.version,
-        input.publisher.id,
-        input.source,
-        input.packageSha256,
-        input.deprecated ? 1 : 0,
-        input.rating,
-        input.manifest.id,
-        input.manifest.version,
-        input.downloads,
-        packagePath,
-        JSON.stringify(input.manifest),
-        input.manifest.id,
-        input.manifest.version,
-        Date.now(),
-        Date.now(),
-      );
+    storePackage(this.db, this.packageRoot, input);
   }
 
   private initializeSchema(): void {
@@ -508,8 +415,7 @@ export class RegistryStore {
 
   private skillVersionSelectSql(): string {
     return [
-      "SELECT s.id AS skill_id, sv.version, s.name, s.description, s.summary, s.category, s.provider, s.runtime,",
-      "s.permissions_json, s.tags_json, s.entry, s.maturity, s.updated_at,",
+      "SELECT sv.skill_id, sv.version,",
       "p.id AS publisher_id, p.name AS publisher_name, p.verified AS publisher_verified,",
       "sv.source, sv.package_sha256, sv.manifest_json, sv.deprecated, sv.rating, sv.download_count",
       "FROM skill_versions sv",

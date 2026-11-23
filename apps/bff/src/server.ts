@@ -19,5 +19,7 @@ export async function createBffHttpServer(options: BffServerOptions): Promise<Se
     allowedHeaders: ["Content-Type", "Last-Event-ID"],
   });
   await app.init();
-  return app.getHttpServer() as Server;
+  const server = app.getHttpServer() as Server;
+  server.once("close", () => { void app.close().catch((error: unknown) => console.error("BFF shutdown failed", error)); });
+  return server;
 }

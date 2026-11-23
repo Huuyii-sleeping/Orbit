@@ -1,3 +1,4 @@
+import { valid } from "semver";
 import { createHash } from "node:crypto";
 import { dirname, join, resolve } from "node:path";
 import type { SkillPackageFile } from "./types.js";
@@ -16,6 +17,9 @@ export function safePackagePath(root: string, file: SkillPackageFile): string {
 }
 
 export function packageStoragePath(packageRoot: string, skillId: string, version: string): string {
+  if (!/^[a-z0-9]+(?:-[a-z0-9]+)*$/.test(skillId) || !version || version.length > 40 || valid(version) !== version.split("+")[0]) {
+    throw new Error("invalid skill id or semantic version");
+  }
   return join(packageRoot, skillId, version, "package.json");
 }
 

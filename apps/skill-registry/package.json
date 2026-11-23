@@ -11,8 +11,12 @@
   },
   "devDependencies": {
     "@types/node": "^24.0.0",
+    "@types/semver": "7.7.1",
     "tsx": "^4.20.0",
     "typescript": "^5.9.0",
     "vitest": "^2.0.5"
+  },
+  "dependencies": {
+    "semver": "7.7.3"
   }
 }

@@ -1,3 +1,4 @@
+import { writeStreamChunk } from "../stream-utils.js";
 import { Inject, Injectable } from "@nestjs/common";
 import type { IncomingMessage, ServerResponse } from "node:http";
 import {
@@ -116,15 +117,10 @@ export class WorkflowRunsService {
     }
     const current = await this.get(runId);
     const waiting = current.waiting?.waiting;
-    if (current.status !== "waiting" || waiting?.kind !== "approval") {
-      throw new WorkflowRunControlError(409, "WORKFLOW_RUN_RESUME_CONFLICT", `运行 ${runId} 当前不可恢复。`);
-    }
-    if (waiting.interruptId !== interruptId && waiting.approvalRequestId !== interruptId) {
+    // Runtime 持有 run-scoped 幂等回执；终态和处理中重试必须交给它判断。
+    if (current.status === "waiting" && (waiting?.kind !== "approval" || (waiting.interruptId !== interruptId && waiting.approvalRequestId !== interruptId))) {
       throw new WorkflowRunControlError(
-        409,
-        "WORKFLOW_RUN_RESUME_CONFLICT",
-        "interruptId 不属于当前 Workflow run。",
-        { runId, interruptId },
+        409, "WORKFLOW_RUN_RESUME_CONFLICT", "interruptId 不属于当前 Workflow run。", { runId, interruptId },
       );
     }
     const result = await this.agent.resumeWorkflowRun(runId, {
@@ -152,7 +148,8 @@ export class WorkflowRunsService {
     const lastEventId = typeof req.headers["last-event-id"] === "string" ? req.headers["last-event-id"] : undefined;
     const controller = new AbortController();
     let completed = false;
-    res.on("close", () => { if (!completed) controller.abort(); });
+    const close = () => { if (!completed) controller.abort(); };
+    res.once("close", close);
     try {
       const upstream = await this.agent.workflowEventStream(runId, requestUrl.search, lastEventId, controller.signal);
       if (!upstream.ok) {
@@ -179,14 +176,15 @@ export class WorkflowRunsService {
           if (chunk.done) break;
           for (const frame of decoder.push(text.decode(chunk.value, { stream: true }))) {
             if (!this.persistFrame(frame)) continue;
-            if (!res.write(frame)) await new Promise<void>((resolve) => res.once("drain", resolve));
+            if (!await writeStreamChunk(res, frame)) return;
           }
         }
         for (const frame of decoder.push(text.decode())) {
           if (!this.persistFrame(frame)) continue;
-          res.write(frame);
+          if (!await writeStreamChunk(res, frame)) return;
         }
       } finally {
+        await reader.cancel().catch(() => undefined);
         reader.releaseLock();
       }
       completed = true;
@@ -197,7 +195,7 @@ export class WorkflowRunsService {
         return;
       }
       throw new WorkflowRunControlError(502, "WORKFLOW_AGENT_UNAVAILABLE", error instanceof Error ? error.message : String(error));
-    }
+    } finally { res.off("close", close); controller.abort(); }
   }
 
   /** 测试和后续运行历史页面可读取已持久化索引。 */

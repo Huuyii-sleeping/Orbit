@@ -38,8 +38,7 @@ export class SettingsService {
   }
 
   async patchSettings(input: unknown): Promise<WebSettings> {
-    const current = await this.getSettings();
     const patch = input && typeof input === "object" && !Array.isArray(input) ? (input as Record<string, unknown>) : {};
-    return this.store.writeSection("settings", normalizeWebSettings({ ...current, ...patch }));
+    return this.store.updateSection("settings", defaultWebSettings, (current) => normalizeWebSettings({ ...normalizeWebSettings(current), ...patch }));
   }
 }

@@ -24,12 +24,16 @@ export type SkillRegistryConfig = {
 /** Resolve runtime config for the standalone Skill Registry service. */
 export function resolveSkillRegistryConfig(env: NodeJS.ProcessEnv = process.env): SkillRegistryConfig {
   const dataRoot = env.SKILL_REGISTRY_DATA_ROOT?.trim() || defaultDataRoot();
+  const adminToken = env.SKILL_REGISTRY_ADMIN_TOKEN?.trim() || DEFAULT_SKILL_REGISTRY_ADMIN_TOKEN;
+  if (env.NODE_ENV === "production" && adminToken === DEFAULT_SKILL_REGISTRY_ADMIN_TOKEN) {
+    throw new Error("SKILL_REGISTRY_ADMIN_TOKEN must be configured for production");
+  }
   return {
     port: readPort(env.SKILL_REGISTRY_PORT, DEFAULT_SKILL_REGISTRY_PORT),
     dbPath: env.SKILL_REGISTRY_DB?.trim() || join(dataRoot, "registry.sqlite"),
     packageRoot: env.SKILL_PACKAGE_ROOT?.trim() || join(dataRoot, "packages"),
     seedRegistryUrl:
       env.SKILL_REGISTRY_SEED?.trim() || join(process.cwd(), "registries", "default-skill-registry.json"),
-    adminToken: env.SKILL_REGISTRY_ADMIN_TOKEN?.trim() || DEFAULT_SKILL_REGISTRY_ADMIN_TOKEN,
+    adminToken,
   };
 }
