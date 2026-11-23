@@ -5,6 +5,10 @@ dist/
 build/
 *.tsbuildinfo
 runtime/
+!apps/agent-cli/src/runtime/
+!apps/agent-cli/src/runtime/**
+!apps/agent-cli/test/unit/runtime/
+!apps/agent-cli/test/unit/runtime/**
 
 # Python
 __pycache__/
