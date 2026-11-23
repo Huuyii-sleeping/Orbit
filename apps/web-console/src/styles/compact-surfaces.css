@@ -61,6 +61,9 @@
 .compact-console .set-nav button { border-radius: 4px; font-size: 12px; font-weight: 400; height: 33px; }
 .compact-console .set-nav button.on, .compact-console .seg button.on { color: var(--text-main); }
 .compact-console .set-card { border: 0; border-top: 1px solid var(--border-subtle); border-radius: 0; padding: 23px 0; background: none; }
+/* 模型面板不叠加通用操作栏的顶边距。 */
+.compact-console .set-card.model-connections-panel { padding-top: 16px; }
+.compact-console .model-connections-panel > .ag-actions { margin-top: 0; padding-top: 0; }
 .compact-console .toggle { background: var(--surface-active); }
 .compact-console .toggle.on { background: var(--control-bg); }
 .compact-console .toggle i { background: var(--text-muted); }
