@@ -63,21 +63,25 @@ export class SqliteSopsRepository implements SopsRepository {
   constructor(@Inject(SopDatabase) private readonly storage: SopDatabase) {}
 
   listDrafts(): WorkflowDraft[] {
-    const rows = this.storage.database.prepare("select content_json from sop_drafts order by updated_at desc").all() as DraftRow[];
+    const { issuer, tenantId } = this.storage.tenantScope();
+    const rows = this.storage.database.prepare("select content_json from sop_drafts where issuer is ? and tenant_id is ? order by updated_at desc").all(issuer, tenantId) as DraftRow[];
     return rows.map((row) => parseDraft(row.content_json));
   }
 
   getDraft(id: string): WorkflowDraft | null {
-    const row = this.storage.database.prepare("select content_json from sop_drafts where id = ?").get(id) as DraftRow | undefined;
+    const { issuer, tenantId } = this.storage.tenantScope();
+    const row = this.storage.database.prepare("select content_json from sop_drafts where id = ? and issuer is ? and tenant_id is ?").get(id, issuer, tenantId) as DraftRow | undefined;
     return row ? parseDraft(row.content_json) : null;
   }
 
   createDraft(draft: WorkflowDraft): WorkflowDraft {
     const normalized = normalizeWorkflowDraft(draft);
+    const { issuer, tenantId } = this.storage.tenantScope();
     this.storage.database.prepare(`
-      insert into sop_drafts(id, revision, schema_version, name, summary, content_json, created_at, updated_at)
-      values (@id, @revision, @schemaVersion, @name, @summary, @contentJson, @createdAt, @updatedAt)
+      insert into sop_drafts(id, revision, schema_version, name, summary, content_json, created_at, updated_at, issuer, tenant_id)
+      values (@id, @revision, @schemaVersion, @name, @summary, @contentJson, @createdAt, @updatedAt, @issuer, @tenantId)
     `).run({
+      issuer, tenantId,
       id: normalized.id,
       revision: normalized.revision,
       schemaVersion: normalized.schemaVersion,
@@ -109,8 +113,9 @@ export class SqliteSopsRepository implements SopsRepository {
           summary = @summary,
           content_json = @contentJson,
           updated_at = @updatedAt
-      where id = @id and revision = @expectedRevision
+      where id = @id and revision = @expectedRevision and issuer is @issuer and tenant_id is @tenantId
     `).run({
+      ...this.storage.tenantScope(),
       id,
       expectedRevision,
       revision: next.revision,
@@ -134,17 +139,22 @@ export class SqliteSopsRepository implements SopsRepository {
       if (!current) return false;
       if (current.revision !== expectedRevision) throw new SopRevisionConflictError(current);
     }
-    return this.storage.database.prepare("delete from sop_drafts where id = ?").run(id).changes === 1;
+    const { issuer, tenantId } = this.storage.tenantScope();
+    return this.storage.database.prepare("delete from sop_drafts where id = ? and issuer is ? and tenant_id is ?").run(id, issuer, tenantId).changes === 1;
   }
 
   publishVersion(input: PublishVersionRecord): WorkflowVersion {
     return this.storage.database.transaction(() => {
-      const next = this.storage.database.prepare("select coalesce(max(version), 0) + 1 as version from sop_versions where workflow_id = ?").get(input.workflowId) as { version: number };
+      const { issuer, tenantId } = this.storage.tenantScope();
+      if (!this.getDraft(input.workflowId)) throw new SopNotFoundError("草稿", input.workflowId);
+      const next = this.storage.database.prepare("select coalesce(max(version), 0) + 1 as version from sop_versions where workflow_id = ? and issuer is ? and tenant_id is ?")
+        .get(input.workflowId, issuer, tenantId) as { version: number };
       const version: WorkflowVersion = { ...input, id: randomUUID(), version: next.version };
       this.storage.database.prepare(`
-        insert into sop_versions(id, workflow_id, version, schema_version, content_hash, created_by, release_notes, content_json, created_at)
-        values (@id, @workflowId, @version, @schemaVersion, @contentHash, @createdBy, @releaseNotes, @contentJson, @createdAt)
+        insert into sop_versions(id, workflow_id, version, schema_version, content_hash, created_by, release_notes, content_json, created_at, issuer, tenant_id)
+        values (@id, @workflowId, @version, @schemaVersion, @contentHash, @createdBy, @releaseNotes, @contentJson, @createdAt, @issuer, @tenantId)
       `).run({
+        issuer, tenantId,
         id: version.id,
         workflowId: version.workflowId,
         version: version.version,
@@ -160,7 +170,9 @@ export class SqliteSopsRepository implements SopsRepository {
   }
 
   listVersions(workflowId: string): SopVersionSummary[] {
-    const rows = this.storage.database.prepare("select content_json from sop_versions where workflow_id = ? order by version desc").all(workflowId) as VersionRow[];
+    const { issuer, tenantId } = this.storage.tenantScope();
+    const rows = this.storage.database.prepare("select content_json from sop_versions where workflow_id = ? and issuer is ? and tenant_id is ? order by version desc")
+      .all(workflowId, issuer, tenantId) as VersionRow[];
     return rows.map((row) => {
       const version = parseVersion(row.content_json);
       const { nodes, edges, ...summary } = version;
@@ -169,23 +181,31 @@ export class SqliteSopsRepository implements SopsRepository {
   }
 
   getVersion(workflowId: string, versionId: string): WorkflowVersion | null {
-    const row = this.storage.database.prepare("select content_json from sop_versions where workflow_id = ? and id = ?").get(workflowId, versionId) as VersionRow | undefined;
+    const { issuer, tenantId } = this.storage.tenantScope();
+    const row = this.storage.database.prepare("select content_json from sop_versions where workflow_id = ? and id = ? and issuer is ? and tenant_id is ?")
+      .get(workflowId, versionId, issuer, tenantId) as VersionRow | undefined;
     return row ? parseVersion(row.content_json) : null;
   }
 
   getVersionById(versionId: string): WorkflowVersion | null {
-    const row = this.storage.database.prepare("select content_json from sop_versions where id = ?").get(versionId) as VersionRow | undefined;
+    const { issuer, tenantId } = this.storage.tenantScope();
+    const row = this.storage.database.prepare("select content_json from sop_versions where id = ? and issuer is ? and tenant_id is ?")
+      .get(versionId, issuer, tenantId) as VersionRow | undefined;
     return row ? parseVersion(row.content_json) : null;
   }
 
   createTemplate(template: SopTemplate): SopTemplate {
     return this.storage.database.transaction(() => {
-      const current = this.storage.database.prepare("select coalesce(max(version), 0) + 1 as version from sop_templates where id = ?").get(template.id) as { version: number };
+      const { issuer, tenantId } = this.storage.tenantScope();
+      if (issuer && !this.getVersion(template.sourceWorkflowId, template.sourceVersionId)) throw new SopNotFoundError("版本", template.sourceVersionId);
+      const current = this.storage.database.prepare("select coalesce(max(version), 0) + 1 as version from sop_templates where id = ? and issuer is ? and tenant_id is ?")
+        .get(template.id, issuer, tenantId) as { version: number };
       const next = { ...template, version: current.version, updatedAt: Date.now() };
       this.storage.database.prepare(`
-        insert into sop_templates(id, version, name, summary, source_workflow_id, source_version_id, parameter_schema_json, content_json, created_at, updated_at)
-        values (@id, @version, @name, @summary, @sourceWorkflowId, @sourceVersionId, @parameterSchema, @contentJson, @createdAt, @updatedAt)
+        insert into sop_templates(id, version, name, summary, source_workflow_id, source_version_id, parameter_schema_json, content_json, created_at, updated_at, issuer, tenant_id)
+        values (@id, @version, @name, @summary, @sourceWorkflowId, @sourceVersionId, @parameterSchema, @contentJson, @createdAt, @updatedAt, @issuer, @tenantId)
       `).run({
+        issuer, tenantId,
         id: next.id,
         version: next.version,
         name: next.name,
@@ -202,23 +222,30 @@ export class SqliteSopsRepository implements SopsRepository {
   }
 
   listTemplates(): SopTemplate[] {
+    const { issuer, tenantId } = this.storage.tenantScope();
     const rows = this.storage.database.prepare(`
       select template.* from sop_templates template
-      inner join (select id, max(version) as version from sop_templates group by id) latest
+      inner join (select id, max(version) as version from sop_templates where issuer is ? and tenant_id is ? group by id) latest
         on latest.id = template.id and latest.version = template.version
+      where template.issuer is ? and template.tenant_id is ?
       order by template.updated_at desc
-    `).all() as TemplateRow[];
+    `).all(issuer, tenantId, issuer, tenantId) as TemplateRow[];
     return rows.map(templateFromRow);
   }
 
   getTemplate(id: string, version?: number): SopTemplate | null {
+    const { issuer, tenantId } = this.storage.tenantScope();
     const row = version === undefined
-      ? this.storage.database.prepare("select * from sop_templates where id = ? order by version desc limit 1").get(id) as TemplateRow | undefined
-      : this.storage.database.prepare("select * from sop_templates where id = ? and version = ?").get(id, version) as TemplateRow | undefined;
+      ? this.storage.database.prepare("select * from sop_templates where id = ? and issuer is ? and tenant_id is ? order by version desc limit 1")
+        .get(id, issuer, tenantId) as TemplateRow | undefined
+      : this.storage.database.prepare("select * from sop_templates where id = ? and version = ? and issuer is ? and tenant_id is ?")
+        .get(id, version, issuer, tenantId) as TemplateRow | undefined;
     return row ? templateFromRow(row) : null;
   }
 
   deleteTemplate(id: string): boolean {
-    return this.storage.database.prepare("delete from sop_templates where id = ?").run(id).changes > 0;
+    const { issuer, tenantId } = this.storage.tenantScope();
+    return this.storage.database.prepare("delete from sop_templates where id = ? and issuer is ? and tenant_id is ?")
+      .run(id, issuer, tenantId).changes > 0;
   }
 }

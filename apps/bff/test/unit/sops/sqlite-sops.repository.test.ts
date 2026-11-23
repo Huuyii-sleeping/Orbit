@@ -6,6 +6,7 @@ import { SopDatabase } from "../../../src/storage/sop-database.js";
 import { SopRevisionConflictError } from "../../../src/sops/sops.errors.js";
 import { SqliteSopsRepository } from "../../../src/sops/sqlite-sops.repository.js";
 import { createTestDraft } from "./test-fixtures.js";
+import { runWithTenant } from "../../../src/identity/tenant-context.js";
 
 const roots: string[] = [];
 
@@ -100,5 +101,67 @@ describe("SqliteSopsRepository", () => {
     } finally {
       database.onModuleDestroy();
     }
+  });
+
+  it("同一业务 ID 在不同租户独立存储，跨租户版本和模板查询不可见", async () => {
+    const dataRoot = await mkdtemp(join(tmpdir(), "orbit-sops-tenants-"));
+    roots.push(dataRoot);
+    const localDatabase = new SopDatabase({ sopDataRoot: dataRoot });
+    const local = new SqliteSopsRepository(localDatabase);
+    const draft = createTestDraft("shared-workflow-id");
+    local.createDraft({ ...draft, name: "旧本地草稿" });
+    localDatabase.onModuleDestroy();
+    const database = new SopDatabase({ sopDataRoot: dataRoot, requireTenantContext: true });
+    const repository = new SqliteSopsRepository(database);
+    const alpha = { issuer: "issuer", tenantId: "org-a", subject: "user" };
+    const beta = { issuer: "issuer", tenantId: "org-b", subject: "user" };
+    try {
+      expect(() => repository.listDrafts()).toThrow(/tenant context/i);
+      const alphaVersion = runWithTenant(alpha, () => {
+        expect(repository.getDraft(draft.id)).toBeNull();
+        repository.createDraft({ ...draft, name: "组织 A" });
+        return repository.publishVersion({
+          schemaVersion: draft.schemaVersion, workflowId: draft.id, contentHash: "alpha",
+          createdAt: Date.now(), createdBy: "tester", nodes: draft.nodes, edges: draft.edges,
+          metadata: { name: "组织 A" },
+        });
+      });
+      runWithTenant(beta, () => {
+        expect(repository.getDraft(draft.id)).toBeNull();
+        expect(repository.getVersionById(alphaVersion.id)).toBeNull();
+        expect(repository.getVersion(draft.id, alphaVersion.id)).toBeNull();
+        expect(() => repository.updateDraft(draft.id, 0, draft)).toThrow();
+        expect(repository.deleteDraft(draft.id)).toBe(false);
+        expect(() => repository.createTemplate({
+          id: "shared-template", version: 0, name: "非法模板", summary: "", sourceWorkflowId: draft.id,
+          sourceVersionId: alphaVersion.id, parameterSchema: {}, draft, createdAt: Date.now(), updatedAt: Date.now(),
+        })).toThrow();
+        repository.createDraft({ ...draft, name: "组织 B" });
+        const betaVersion = repository.publishVersion({
+          schemaVersion: draft.schemaVersion, workflowId: draft.id, contentHash: "beta",
+          createdAt: Date.now(), createdBy: "tester", nodes: draft.nodes, edges: draft.edges,
+          metadata: { name: "组织 B" },
+        });
+        expect(betaVersion.version).toBe(1);
+        expect(repository.createTemplate({
+          id: "shared-template", version: 0, name: "组织 B 模板", summary: "", sourceWorkflowId: draft.id,
+          sourceVersionId: betaVersion.id, parameterSchema: {}, draft, createdAt: Date.now(), updatedAt: Date.now(),
+        }).version).toBe(1);
+        expect(repository.getTemplate("shared-template")?.name).toBe("组织 B 模板");
+        expect(repository.listVersions(draft.id)).toHaveLength(1);
+        expect(repository.getDraft(draft.id)?.name).toBe("组织 B");
+      });
+      runWithTenant(alpha, () => {
+        expect(repository.getVersionById(alphaVersion.id)).toEqual(alphaVersion);
+        expect(repository.getTemplate("shared-template")).toBeNull();
+        expect(repository.deleteTemplate("shared-template")).toBe(false);
+        expect(repository.createTemplate({
+          id: "shared-template", version: 0, name: "组织 A 模板", summary: "", sourceWorkflowId: draft.id,
+          sourceVersionId: alphaVersion.id, parameterSchema: {}, draft, createdAt: Date.now(), updatedAt: Date.now(),
+        }).version).toBe(1);
+        expect(repository.listVersions(draft.id)).toHaveLength(1);
+        expect(repository.getDraft(draft.id)?.name).toBe("组织 A");
+      });
+    } finally { database.onModuleDestroy(); }
   });
 });

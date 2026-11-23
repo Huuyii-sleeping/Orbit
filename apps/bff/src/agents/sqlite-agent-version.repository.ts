@@ -24,21 +24,23 @@ export class SqliteAgentVersionRepository implements AgentVersionRepository {
 
   publish(input: PublishAgentVersionRecord): AgentVersion {
     return this.storage.database.transaction(() => {
+      const { issuer, tenantId } = this.storage.tenantScope();
       const next = this.storage.database.prepare(`
         select coalesce(max(version), 0) + 1 as version
         from agent_versions
-        where agent_profile_id = ?
-      `).get(input.agentProfileId) as { version: number };
+        where agent_profile_id = ? and issuer is ? and tenant_id is ?
+      `).get(input.agentProfileId, issuer, tenantId) as { version: number };
       const version: AgentVersion = { ...input, id: randomUUID(), version: next.version };
       this.storage.database.prepare(`
         insert into agent_versions(
           id, agent_profile_id, version, content_hash, name, description,
-          snapshot_json, created_by, release_notes, created_at
+          snapshot_json, created_by, release_notes, created_at, issuer, tenant_id
         ) values (
           @id, @agentProfileId, @version, @contentHash, @name, @description,
-          @snapshotJson, @createdBy, @releaseNotes, @createdAt
+          @snapshotJson, @createdBy, @releaseNotes, @createdAt, @issuer, @tenantId
         )
       `).run({
+        issuer, tenantId,
         id: version.id,
         agentProfileId: version.agentProfileId,
         version: version.version,
@@ -55,29 +57,34 @@ export class SqliteAgentVersionRepository implements AgentVersionRepository {
   }
 
   list(agentProfileId?: string): AgentVersion[] {
+    const { issuer, tenantId } = this.storage.tenantScope();
     const rows = agentProfileId
       ? this.storage.database.prepare(`
           select snapshot_json from agent_versions
-          where agent_profile_id = ?
+          where agent_profile_id = ? and issuer is ? and tenant_id is ?
           order by version desc
-        `).all(agentProfileId) as AgentVersionRow[]
+        `).all(agentProfileId, issuer, tenantId) as AgentVersionRow[]
       : this.storage.database.prepare(`
           select snapshot_json from agent_versions
+          where issuer is ? and tenant_id is ?
           order by created_at desc, agent_profile_id, version desc
-        `).all() as AgentVersionRow[];
+        `).all(issuer, tenantId) as AgentVersionRow[];
     return rows.map((row) => parseVersion(row.snapshot_json));
   }
 
   getById(agentVersionId: string): AgentVersion | undefined {
-    const row = this.storage.database.prepare("select snapshot_json from agent_versions where id = ?").get(agentVersionId) as AgentVersionRow | undefined;
+    const { issuer, tenantId } = this.storage.tenantScope();
+    const row = this.storage.database.prepare("select snapshot_json from agent_versions where id = ? and issuer is ? and tenant_id is ?")
+      .get(agentVersionId, issuer, tenantId) as AgentVersionRow | undefined;
     return row ? parseVersion(row.snapshot_json) : undefined;
   }
 
   resolvePublishedVersion(agentProfileId: string, agentVersionId: string): AgentVersion | undefined {
+    const { issuer, tenantId } = this.storage.tenantScope();
     const row = this.storage.database.prepare(`
       select snapshot_json from agent_versions
-      where id = ? and agent_profile_id = ?
-    `).get(agentVersionId, agentProfileId) as AgentVersionRow | undefined;
+      where id = ? and agent_profile_id = ? and issuer is ? and tenant_id is ?
+    `).get(agentVersionId, agentProfileId, issuer, tenantId) as AgentVersionRow | undefined;
     return row ? parseVersion(row.snapshot_json) : undefined;
   }
 }

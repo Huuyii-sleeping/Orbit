@@ -6,13 +6,15 @@ import { copyFile, mkdir, rename, rm } from "node:fs/promises";
 import { basename, dirname, join } from "node:path";
 import { SopStorageError } from "../sops/sops.errors.js";
 import type { SopStorageHealth } from "../sops/sops.types.js";
+import { requireTenantContext } from "../identity/tenant-context.js";
 
 export type SopDatabaseOptions = {
   sopDataRoot?: string;
   sopDatabasePath?: string;
+  requireTenantContext?: boolean;
 };
 
-const latestMigrationVersion = 6;
+const latestMigrationVersion = 7;
 
 function readPragmaValue(row: unknown, key: string): string {
   if (!row || typeof row !== "object") return "";
@@ -27,7 +29,7 @@ export class SopDatabase implements OnModuleDestroy {
   private connection: Database.Database;
   private restoring = false;
 
-  constructor(options: SopDatabaseOptions = {}) {
+  constructor(private readonly options: SopDatabaseOptions = {}) {
     const dataRoot = options.sopDataRoot ?? join(process.cwd(), ".data", "sops");
     this.databasePath = options.sopDatabasePath ?? join(dataRoot, "workflows.sqlite");
     this.backupRoot = join(dataRoot, "backups");
@@ -37,6 +39,13 @@ export class SopDatabase implements OnModuleDestroy {
   /** 返回已完成迁移且通过完整性检查的连接。 */
   get database(): Database.Database {
     return this.connection;
+  }
+
+  /** 当前产品数据归属；本地旧数据使用空命名空间，SaaS 必须来自已验证请求。 */
+  tenantScope(): { issuer: string; tenantId: string } {
+    if (!this.options.requireTenantContext) return { issuer: "", tenantId: "" };
+    const { issuer, tenantId } = requireTenantContext();
+    return { issuer, tenantId };
   }
 
   /** 返回 SQLite 健康信息。 */
@@ -54,6 +63,7 @@ export class SopDatabase implements OnModuleDestroy {
 
   /** 使用 SQLite 在线备份创建一致快照。 */
   async backup(label = "manual"): Promise<string> {
+    if (this.options.requireTenantContext) throw new SopStorageError("共享 SaaS 数据库不支持租户请求执行整库备份。 ");
     if (this.databasePath === ":memory:") throw new SopStorageError("内存数据库不支持备份。 ");
     await mkdir(this.backupRoot, { recursive: true });
     const safeLabel = label.replace(/[^a-zA-Z0-9_-]+/g, "-").slice(0, 40) || "manual";
@@ -65,6 +75,7 @@ export class SopDatabase implements OnModuleDestroy {
 
   /** 只允许从受控备份目录恢复，并使用临时文件原子替换数据库。 */
   async restore(fileName: string): Promise<void> {
+    if (this.options.requireTenantContext) throw new SopStorageError("共享 SaaS 数据库不支持租户请求执行整库恢复。 ");
     if (this.restoring) throw new SopStorageError("SOP 数据库正在恢复中。");
     this.restoring = true;
     try {
@@ -303,6 +314,83 @@ export class SopDatabase implements OnModuleDestroy {
       database.transaction(() => {
         database.exec("drop table if exists approval_requests;");
         database.prepare("insert into schema_migrations(version, applied_at) values (?, ?)").run(6, Date.now());
+      })();
+    }
+    if (current.version < 7) {
+      database.transaction(() => {
+        // 旧主键与唯一键不含租户；重建表以允许各租户使用相同业务 ID 和版本号。
+        database.exec(`
+          create table sop_drafts_next (
+            issuer text not null default '', tenant_id text not null default '', id text not null,
+            revision integer not null, schema_version integer not null, name text not null,
+            summary text not null, content_json text not null, created_at integer not null, updated_at integer not null,
+            primary key(issuer, tenant_id, id),
+            check ((issuer = '') = (tenant_id = ''))
+          );
+          insert into sop_drafts_next(id, revision, schema_version, name, summary, content_json, created_at, updated_at)
+            select id, revision, schema_version, name, summary, content_json, created_at, updated_at from sop_drafts;
+          drop table sop_drafts;
+          alter table sop_drafts_next rename to sop_drafts;
+          create index sop_drafts_updated_at on sop_drafts(issuer, tenant_id, updated_at desc);
+
+          create table sop_versions_next (
+            issuer text not null default '', tenant_id text not null default '', id text not null,
+            workflow_id text not null, version integer not null, schema_version integer not null,
+            content_hash text not null, created_by text not null, release_notes text not null,
+            content_json text not null, created_at integer not null,
+            primary key(issuer, tenant_id, id), unique(issuer, tenant_id, workflow_id, version),
+            check ((issuer = '') = (tenant_id = ''))
+          );
+          insert into sop_versions_next(id, workflow_id, version, schema_version, content_hash, created_by, release_notes, content_json, created_at)
+            select id, workflow_id, version, schema_version, content_hash, created_by, release_notes, content_json, created_at from sop_versions;
+          drop table sop_versions;
+          alter table sop_versions_next rename to sop_versions;
+          create index sop_versions_workflow on sop_versions(issuer, tenant_id, workflow_id, version desc);
+          create trigger sop_versions_tenant_draft before insert on sop_versions
+            when new.issuer != '' and not exists (
+              select 1 from sop_drafts where issuer = new.issuer and tenant_id = new.tenant_id and id = new.workflow_id
+            ) begin select raise(abort, 'tenant workflow draft is required'); end;
+
+          create table sop_templates_next (
+            issuer text not null default '', tenant_id text not null default '', id text not null,
+            version integer not null, name text not null, summary text not null,
+            source_workflow_id text not null, source_version_id text not null,
+            parameter_schema_json text not null, content_json text not null,
+            created_at integer not null, updated_at integer not null,
+            primary key(issuer, tenant_id, id, version),
+            check ((issuer = '') = (tenant_id = ''))
+          );
+          insert into sop_templates_next(id, version, name, summary, source_workflow_id, source_version_id, parameter_schema_json, content_json, created_at, updated_at)
+            select id, version, name, summary, source_workflow_id, source_version_id, parameter_schema_json, content_json, created_at, updated_at from sop_templates;
+          drop table sop_templates;
+          alter table sop_templates_next rename to sop_templates;
+          create index sop_templates_updated_at on sop_templates(issuer, tenant_id, updated_at desc);
+          create trigger sop_templates_tenant_version before insert on sop_templates
+            when new.issuer != '' and not exists (
+              select 1 from sop_versions where issuer = new.issuer and tenant_id = new.tenant_id
+                and id = new.source_version_id and workflow_id = new.source_workflow_id
+            ) begin select raise(abort, 'tenant workflow version is required'); end;
+
+          create table agent_versions_next (
+            issuer text not null default '', tenant_id text not null default '', id text not null,
+            agent_profile_id text not null, version integer not null, content_hash text not null,
+            name text not null, description text not null, snapshot_json text not null,
+            created_by text not null, release_notes text not null, created_at integer not null,
+            primary key(issuer, tenant_id, id), unique(issuer, tenant_id, agent_profile_id, version),
+            check ((issuer = '') = (tenant_id = ''))
+          );
+          insert into agent_versions_next(id, agent_profile_id, version, content_hash, name, description, snapshot_json, created_by, release_notes, created_at)
+            select id, agent_profile_id, version, content_hash, name, description, snapshot_json, created_by, release_notes, created_at from agent_versions;
+          drop table agent_versions;
+          alter table agent_versions_next rename to agent_versions;
+          create index agent_versions_profile on agent_versions(issuer, tenant_id, agent_profile_id, version desc);
+          create index agent_versions_created on agent_versions(issuer, tenant_id, created_at desc);
+          create trigger agent_versions_immutable_update before update on agent_versions
+            begin select raise(abort, 'agent_versions is immutable'); end;
+          create trigger agent_versions_immutable_delete before delete on agent_versions
+            begin select raise(abort, 'agent_versions is immutable'); end;
+        `);
+        database.prepare("insert into schema_migrations(version, applied_at) values (?, ?)").run(7, Date.now());
       })();
     }
     const after = database.prepare("select coalesce(max(version), 0) as version from schema_migrations").get() as { version: number };

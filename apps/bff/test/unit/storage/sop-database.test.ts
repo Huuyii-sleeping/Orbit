@@ -23,7 +23,7 @@ describe("SopDatabase", () => {
   it("启用 WAL 并创建显式迁移表、SOP 运行表和 AgentVersion，但不创建审批产品表", async () => {
     const database = new SopDatabase({ sopDataRoot: await root() });
     try {
-      expect(database.health()).toMatchObject({ ok: true, journalMode: "wal", migrationVersion: 6 });
+      expect(database.health()).toMatchObject({ ok: true, journalMode: "wal", migrationVersion: 7 });
       const tables = database.database.prepare("select name from sqlite_master where type = 'table' order by name").all() as Array<{ name: string }>;
       expect(tables.map((item) => item.name)).toEqual(expect.arrayContaining([
         "schema_migrations",
@@ -121,5 +121,56 @@ describe("SopDatabase", () => {
     } finally {
       reopened.onModuleDestroy();
     }
+  });
+
+  it("从 v6 迁移时保留旧数据在本地命名空间，并允许租户使用相同 ID", async () => {
+    const dataRoot = await root();
+    const path = join(dataRoot, "workflows.sqlite");
+    const legacy = new Database(path);
+    try {
+      legacy.exec(`
+        create table schema_migrations(version integer primary key, applied_at integer not null);
+        insert into schema_migrations values(6, 1);
+        create table sop_drafts(id text primary key, revision integer not null, schema_version integer not null,
+          name text not null, summary text not null, content_json text not null, created_at integer not null, updated_at integer not null);
+        create table sop_versions(id text primary key, workflow_id text not null, version integer not null,
+          schema_version integer not null, content_hash text not null, created_by text not null, release_notes text not null,
+          content_json text not null, created_at integer not null, unique(workflow_id, version));
+        create table sop_templates(id text not null, version integer not null, name text not null, summary text not null,
+          source_workflow_id text not null, source_version_id text not null, parameter_schema_json text not null,
+          content_json text not null, created_at integer not null, updated_at integer not null, primary key(id, version));
+        create table agent_versions(id text primary key, agent_profile_id text not null, version integer not null,
+          content_hash text not null, name text not null, description text not null, snapshot_json text not null,
+          created_by text not null, release_notes text not null, created_at integer not null, unique(agent_profile_id, version));
+        insert into sop_drafts values('same-id', 0, 2, '旧草稿', '', '{}', 1, 1);
+        insert into sop_versions values('same-version', 'same-id', 1, 2, 'hash', 'old', '', '{}', 1);
+        insert into sop_templates values('same-template', 1, '旧模板', '', 'same-id', 'same-version', '{}', '{}', 1, 1);
+        insert into agent_versions values('same-agent', 'same-profile', 1, 'hash', '旧 Agent', '', '{}', 'old', '', 1);
+      `);
+    } finally { legacy.close(); }
+    const database = new SopDatabase({ sopDataRoot: dataRoot, requireTenantContext: true });
+    try {
+      expect(database.health().migrationVersion).toBe(7);
+      for (const table of ["sop_drafts", "sop_versions", "sop_templates", "agent_versions"]) {
+        const row = database.database.prepare(`select issuer, tenant_id from ${table}`).get() as { issuer: string; tenant_id: string };
+        expect(row).toEqual({ issuer: "", tenant_id: "" });
+      }
+      database.database.prepare(`insert into sop_drafts
+        (issuer, tenant_id, id, revision, schema_version, name, summary, content_json, created_at, updated_at)
+        values (?, ?, 'same-id', 0, 2, '租户草稿', '', '{}', 1, 1)`).run("issuer", "org-a");
+      expect(database.database.prepare("select count(*) as count from sop_drafts where id = 'same-id'").get())
+        .toEqual({ count: 2 });
+      expect(() => database.database.prepare(`insert into sop_versions
+        (issuer, tenant_id, id, workflow_id, version, schema_version, content_hash, created_by, release_notes, content_json, created_at)
+        values ('issuer', 'org-b', 'new-version', 'same-id', 1, 2, 'hash', 'user', '', '{}', 1)`).run())
+        .toThrow(/tenant workflow draft/i);
+      expect(() => database.database.prepare(`insert into sop_templates
+        (issuer, tenant_id, id, version, name, summary, source_workflow_id, source_version_id,
+          parameter_schema_json, content_json, created_at, updated_at)
+        values ('issuer', 'org-a', 'new-template', 1, 'test', '', 'same-id', 'same-version', '{}', '{}', 1, 1)`).run())
+        .toThrow(/tenant workflow version/i);
+      await expect(database.backup()).rejects.toThrow(/共享 SaaS/);
+      await expect(database.restore("anything.sqlite")).rejects.toThrow(/共享 SaaS/);
+    } finally { database.onModuleDestroy(); }
   });
 });

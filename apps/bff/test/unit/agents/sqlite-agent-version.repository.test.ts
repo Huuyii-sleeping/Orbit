@@ -5,6 +5,7 @@ import { afterEach, describe, expect, it } from "vitest";
 import type { AgentVersion } from "@orbit/workflow-core";
 import { SopDatabase } from "../../../src/storage/sop-database.js";
 import { SqliteAgentVersionRepository } from "../../../src/agents/sqlite-agent-version.repository.js";
+import { runWithTenant } from "../../../src/identity/tenant-context.js";
 
 const roots: string[] = [];
 
@@ -51,5 +52,32 @@ describe("SqliteAgentVersionRepository", () => {
     } finally {
       database.onModuleDestroy();
     }
+  });
+
+  it("相同 profile ID 在不同租户分别从版本 1 发布，旧本地版本和其他租户版本不可见", async () => {
+    const root = await mkdtemp(join(tmpdir(), "orbit-agent-version-tenants-"));
+    roots.push(root);
+    const localDatabase = new SopDatabase({ sopDataRoot: root });
+    const localVersion = new SqliteAgentVersionRepository(localDatabase).publish(snapshot("shared-profile", "旧本地"));
+    localDatabase.onModuleDestroy();
+    const database = new SopDatabase({ sopDataRoot: root, requireTenantContext: true });
+    const repository = new SqliteAgentVersionRepository(database);
+    const alpha = { issuer: "issuer", tenantId: "org-a", subject: "u1" };
+    const beta = { issuer: "issuer", tenantId: "org-b", subject: "u1" };
+    try {
+      expect(() => repository.list()).toThrow(/tenant context/i);
+      const alphaVersion = runWithTenant(alpha, () => {
+        expect(repository.getById(localVersion.id)).toBeUndefined();
+        return repository.publish(snapshot("shared-profile", "组织 A"));
+      });
+      runWithTenant(beta, () => {
+        expect(repository.getById(alphaVersion.id)).toBeUndefined();
+        expect(repository.resolvePublishedVersion("shared-profile", alphaVersion.id)).toBeUndefined();
+        const own = repository.publish(snapshot("shared-profile", "组织 B"));
+        expect(own.version).toBe(1);
+        expect(repository.list("shared-profile")).toEqual([own]);
+      });
+      runWithTenant(alpha, () => expect(repository.list()).toEqual([alphaVersion]));
+    } finally { database.onModuleDestroy(); }
   });
 });
