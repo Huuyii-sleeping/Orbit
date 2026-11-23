@@ -4,7 +4,7 @@ node_modules/
 dist/
 build/
 *.tsbuildinfo
-runtime/
+/runtime/
 
 # Python
 __pycache__/
@@ -50,3 +50,7 @@ apps/agent-cli/.sessions/
 
 # BFF runtime state
 apps/bff/.data/
+
+# Local model routing configuration and encrypted credentials
+models.local.json
+**/.runtime/model-connections/

@@ -1,8 +1,9 @@
+import type { RuntimeGateway } from "@orbit/runtime-contracts";
 import { Mastra } from "@mastra/core/mastra";
 import type { DynamicModule, Type } from "@nestjs/common";
 import { describe, expect, it } from "vitest";
 import { AgentAppModule } from "../../../src/nest/agent-app.module.js";
-import type { AgentService } from "../../../src/service-api/index.js";
+import { AgentService } from "../../../src/service-api/index.js";
 
 function moduleName(input: DynamicModule | Type<unknown>): string {
   return typeof input === "function" ? input.name : input.module.name;
@@ -12,7 +13,9 @@ describe("nest/agent-app.module", () => {
   it("keeps domain modules explicit and imports MastraModule last", () => {
     const runtimeGateway = { agent: {}, workflow: {}, tools: {}, memory: {} };
     const definition = AgentAppModule.register({
-      service: { runtimeGateway } as unknown as AgentService,
+      service: new AgentService({ toolService: {
+        listToolMetadata: async () => [], listToolRegistrations: async () => [],
+      } }, undefined, { runtimeGateway: runtimeGateway as RuntimeGateway }),
       mastra: new Mastra({}),
       cleanupMastra: async () => undefined,
     });
@@ -28,6 +31,7 @@ describe("nest/agent-app.module", () => {
       "SkillsModule",
       "SecurityModule",
       "AuditModule",
+      "ModelsModule",
       "EventsHealthModule",
       "McpModule",
       "MastraModule",

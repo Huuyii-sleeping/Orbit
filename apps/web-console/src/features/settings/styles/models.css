@@ -1,0 +1,25 @@
+.orbit-studio .model-connection-form { padding: 18px; margin: 16px 0; border: 1px solid var(--border-strong); border-radius: 12px; background: var(--composer-bg); }
+.orbit-studio .model-connection-item { display: grid; gap: 6px; padding: 16px 0; border-bottom: 1px solid var(--border-subtle); font-size: 13px; overflow-wrap: anywhere; }
+.orbit-studio .model-connection-item span, .orbit-studio .model-connection-item small { color: var(--text-soft); }
+.orbit-studio .model-connection-form .ag-actions, .orbit-studio .model-connections-panel > .ag-actions { display: flex; gap: 8px; flex-wrap: wrap; }
+.orbit-studio .model-connections-panel > .draft-sub { margin-top: 16px; }
+
+.orbit-studio .model-connection-dialog { position: fixed; inset: 0; margin: auto; width: min(560px, calc(100vw - 32px)); max-height: calc(100dvh - 48px); overflow-y: auto; padding: 0; color: var(--text-main); background: var(--panel-bg); border: 1px solid var(--border-strong); border-radius: 12px; box-shadow: 0 24px 80px #0004; }
+.orbit-studio .model-connection-dialog::backdrop { background: #0007; }
+.orbit-studio .model-dialog-heading { display: flex; justify-content: space-between; align-items: flex-start; gap: 16px; padding: 24px 24px 20px; border-bottom: 1px solid var(--border-subtle); }
+.orbit-studio .model-dialog-heading h2 { margin: 0; font-size: 18px; font-weight: 650; }
+.orbit-studio .model-dialog-heading p { margin: 8px 0 0; color: var(--text-muted); font-size: 12px; }
+.orbit-studio .model-connection-dialog .model-connection-form { margin: 0; border: 0; border-radius: 0; padding: 24px; background: none; }
+.orbit-studio .model-connection-form .field > label { font-size: 12px; }
+.orbit-studio .model-connection-form .ag-actions { border-top: 1px solid var(--border-subtle); padding-top: 18px; background: none; }
+
+.orbit-studio .model-connection-heading { display: flex; justify-content: space-between; align-items: center; gap: 16px; }
+.orbit-studio .model-key-clear { display: flex; align-items: center; gap: 8px; margin-top: 10px; color: var(--text-soft); font-size: 12px; }
+
+.orbit-studio .model-connection-actions { display: flex; align-items: center; gap: 8px; flex-shrink: 0; }
+.orbit-studio .model-delete-button { color: var(--danger, #b42318); }
+.orbit-studio .model-delete-confirm { padding: 12px; border: 1px solid var(--border-strong); border-radius: 8px; background: var(--composer-bg); }
+.orbit-studio .model-delete-confirm p { margin: 0 0 12px; line-height: 1.6; }
+.orbit-studio .model-delete-confirm .model-connection-actions { justify-content: flex-end; }
+.orbit-studio .model-deleted-list { margin-top: 20px; font-size: 13px; }
+.orbit-studio .model-deleted-list summary { cursor: pointer; color: var(--text-soft); }

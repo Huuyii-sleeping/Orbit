@@ -1,4 +1,4 @@
-import type { AgentProfile } from "../../../api";
+import type { AgentProfile } from "../../../api/index";
 
 /** 按技能绑定过滤 Agent；状态只表达接口实际提供的草稿信息。 */
 export type AgentListFilter = "all" | "bound" | "unbound";

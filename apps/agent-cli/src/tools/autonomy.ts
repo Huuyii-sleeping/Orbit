@@ -1,8 +1,8 @@
 import { readFile, writeFile } from "node:fs/promises";
 import path from "node:path";
 import * as process from "node:process";
-import { RUNTIME_CONFIG } from "../runtime-config.js";
-import { runClaimTask, runScanUnclaimedTasks } from "./task-board.js";
+import { RUNTIME_CONFIG } from "../config/runtime-config.js";
+import { runClaimTask, runScanUnclaimedTasks } from "./tasks/task-board.js";
 
 export const POLL_INTERVAL_MS = RUNTIME_CONFIG.autonomyPollIntervalMs;
 export const IDLE_TIMEOUT_MS = RUNTIME_CONFIG.autonomyIdleTimeoutMs;

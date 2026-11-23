@@ -1,4 +1,3 @@
-import type { AgentAppRuntimeDeps } from "../bootstrap/app-runtime.js";
 import type { AgentSessionRecord } from "../service-api/sessions.js";
 import { createAgentSessionRecord } from "../service-api/sessions.js";
 import type { AgentRuntimeContext } from "../service-api/sessions.js";
@@ -25,16 +24,14 @@ export class AgentHost {
   private eventCounter = 0;
 
   constructor(
-    private readonly deps: AgentAppRuntimeDeps,
-    private readonly sessionStore: SessionStore = new SessionStore(),
+    private readonly sessionStore: Pick<
+      SessionStore,
+      "list" | "save" | "delete"
+    > = new SessionStore(),
     options: { eventBufferLimit?: number } = {},
   ) {
     const configuredLimit = Math.trunc(options.eventBufferLimit ?? DEFAULT_EVENT_BUFFER_LIMIT);
     this.eventBufferLimit = configuredLimit > 0 ? configuredLimit : DEFAULT_EVENT_BUFFER_LIMIT;
-  }
-
-  runtime(): AgentAppRuntimeDeps {
-    return this.deps;
   }
 
   async initialize(): Promise<void> {
@@ -98,7 +95,10 @@ export class AgentHost {
   }
 
   /** 使用产品指定的 thread/session id 创建 session。 */
-  createSessionWithId(sessionId: string, agent: AgentRuntimeContext | null = null): AgentSessionRecord {
+  createSessionWithId(
+    sessionId: string,
+    agent: AgentRuntimeContext | null = null,
+  ): AgentSessionRecord {
     if (this.sessions.has(sessionId)) {
       throw new Error(`session already exists: ${sessionId}`);
     }
@@ -116,7 +116,8 @@ export class AgentHost {
 
   async persistSession(session: AgentSessionRecord): Promise<void> {
     this.sessions.set(session.id, session);
-    await this.sessionStore.save(session);
+    // busy 是进程内锁；持久化快照不能让会话在重启后永久占用。
+    await this.sessionStore.save({ ...session, busy: false });
   }
 
   /** 删除 Memory thread 对应的 session 及持久化记录。 */

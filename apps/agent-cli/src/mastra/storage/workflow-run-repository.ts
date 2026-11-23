@@ -1,7 +1,7 @@
 import path from "node:path";
 import { stableSerialize, type AgentVersion, type WorkflowIR, type WorkflowRunSnapshot } from "@orbit/workflow-core";
 import { RuntimePortError } from "@orbit/runtime-contracts";
-import { isLocalPersistenceEnabled } from "../../runtime-config.js";
+import { isLocalPersistenceEnabled } from "../../config/runtime-config.js";
 import { retentionDaysFor } from "../../security/local-retention.js";
 import { JsonFileRepository } from "./json-file-repository.js";
 import { resolveMastraRuntimePaths } from "./paths.js";

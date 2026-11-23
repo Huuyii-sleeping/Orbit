@@ -1,4 +1,4 @@
-import type { ChatCompletionMessageParam } from "openai/resources/chat/completions";
+import type { AgentInputMessage, SessionCompactionResult } from "@orbit/runtime-contracts";
 import { resolveAgentServiceBaseUrl } from "./config.js";
 import { createAgentBridgeManifest } from "./bridge.js";
 
@@ -18,7 +18,7 @@ type RemoteSessionRecord = {
   createdAt: number | null;
   updatedAt: number | null;
   busy: boolean;
-  history: ChatCompletionMessageParam[];
+  history: AgentInputMessage[];
   messageCount: number;
   rounds: number | null;
 };
@@ -39,15 +39,16 @@ function getBoolean(value: unknown): boolean {
   return typeof value === "boolean" ? value : Boolean(value);
 }
 
-function getMessages(value: unknown): ChatCompletionMessageParam[] {
-  return Array.isArray(value) ? (value as ChatCompletionMessageParam[]) : [];
+function getMessages(value: unknown): AgentInputMessage[] {
+  return Array.isArray(value) ? (value as AgentInputMessage[]) : [];
 }
 
 function normalizeManifest(baseUrl: string, manifest: JsonObject): JsonObject {
   const endpoints = getObject(manifest.endpoints);
   const normalizedEndpoints: JsonObject = {};
   for (const [key, value] of Object.entries(endpoints)) {
-    normalizedEndpoints[key] = typeof value === "string" ? new URL(value, baseUrl).toString() : value;
+    normalizedEndpoints[key] =
+      typeof value === "string" ? new URL(value, baseUrl).toString() : value;
   }
   return {
     ...manifest,
@@ -124,6 +125,31 @@ export class AgentServiceClient {
     });
   }
 
+  /** daemon 端完成实际 Memory 压缩，不在客户端改写历史缓存。 */
+  async compactSession(sessionId: string, keepRecent?: number): Promise<SessionCompactionResult> {
+    const response = await this.requestJson(
+      "POST",
+      `/sessions/${encodeURIComponent(sessionId)}/compact`,
+      { keepRecent },
+    );
+    const value = getObject(response.result);
+    const counts = [
+      "keptRecent",
+      "oldMessageCount",
+      "newMessageCount",
+      "estimatedBefore",
+      "estimatedAfter",
+      "reducedBy",
+    ] as const;
+    if (
+      typeof value.sourceThreadId !== "string" ||
+      typeof value.threadId !== "string" ||
+      counts.some((key) => typeof value[key] !== "number" || !Number.isFinite(value[key]))
+    )
+      throw new Error("daemon returned invalid compaction result");
+    return value as SessionCompactionResult;
+  }
+
   async createSession(): Promise<{ id: string }> {
     const response = await this.requestJson("POST", "/sessions", {});
     const session = getObject(response.session);
@@ -192,7 +218,9 @@ export class AgentServiceClient {
       return tools.map((tool) => {
         const record = getObject(tool);
         return Object.fromEntries(
-          Object.entries(record).flatMap(([key, value]) => (typeof value === "string" ? [[key, value]] : [])),
+          Object.entries(record).flatMap(([key, value]) =>
+            typeof value === "string" ? [[key, value]] : [],
+          ),
         );
       });
     } catch {
@@ -315,7 +343,10 @@ export class AgentServiceClient {
     return typeof endpoint === "string" ? endpoint : fallbackPath;
   }
 
-  private async readSession(id: string, fallbackSummary?: JsonObject): Promise<RemoteSessionRecord> {
+  private async readSession(
+    id: string,
+    fallbackSummary?: JsonObject,
+  ): Promise<RemoteSessionRecord> {
     const response = await this.requestJson("GET", `/sessions/${encodeURIComponent(id)}`);
     const session = getObject(response.session);
     const summary = fallbackSummary ?? session;

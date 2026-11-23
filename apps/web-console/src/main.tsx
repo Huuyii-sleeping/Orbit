@@ -3,7 +3,7 @@ import ReactDOM from "react-dom/client";
 import { AppErrorBoundary } from "./app/AppErrorBoundary";
 import { AppEntry } from "./app/AppEntry";
 import { lazy, Suspense } from "react";
-import "./styles.css";
+import "./styles/index.css";
 import "./styles/compact-console.css";
 import "./features/sop/styles/free-canvas.css";
 

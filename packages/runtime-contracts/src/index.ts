@@ -4,3 +4,4 @@ export * from "./workflow.js";
 export * from "./tool.js";
 export * from "./memory.js";
 export * from "./gateway.js";
+export * from "./model-connections.js";

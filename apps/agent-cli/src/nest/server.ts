@@ -9,7 +9,7 @@ import {
   shutdownMastraRuntime,
 } from "../mastra/instance/factory.js";
 import type { AgentService } from "../service-api/index.js";
-import type { AgentServerLike } from "../service-api/server.js";
+import type { AgentServerLike } from "../entrypoints/server.js";
 import { AgentAppModule } from "./agent-app.module.js";
 import { OrbitHttpExceptionFilter } from "./orbit-http-exception.filter.js";
 import { OrbitShutdownService } from "./orbit-shutdown.service.js";

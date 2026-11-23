@@ -1,5 +1,6 @@
 import {
   type AgentVersion,
+  type AgentConfiguration,
   type WorkflowDiagnostic,
   type WorkflowDraft,
   type WorkflowRunMode,
@@ -141,6 +142,8 @@ export type AgentProfile = {
   skills: AgentSkillBinding[];
   actions: string[];
   systemPrompt: string;
+  /** Agent 配置与发布版本共用的运行参数。 */
+  configuration?: AgentConfiguration;
   /** Optional user-picked accent color as a `#rrggbb` hex string; empty means auto (hash-based). */
   color: string;
   createdAt: number | null;
@@ -158,6 +161,7 @@ export type AgentProfileInput = Pick<
   | "skills"
   | "actions"
   | "systemPrompt"
+  | "configuration"
   | "color"
 >;
 
@@ -295,3 +299,8 @@ export type AgentStreamEvent = {
 export type AgentEventStream = {
   close(): void;
 };
+
+export type { AgentTestRun, AgentTestConfiguration } from "@orbit/workflow-core";
+
+/** Runtime 实际注册工具的只读目录。 */
+export type AgentToolOption = { name: string; description: string };

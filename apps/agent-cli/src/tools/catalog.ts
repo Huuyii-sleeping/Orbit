@@ -1,5 +1,5 @@
 import type { ChatCompletionTool } from "openai/resources/chat/completions";
-import { listMcpToolRegistrations } from "./mcp.js";
+import { listMcpToolRegistrations } from "./mcp/mcp.js";
 import {
   toChatCompletionTool,
   toToolMetadata,

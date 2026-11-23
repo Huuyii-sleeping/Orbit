@@ -12,7 +12,7 @@ import {
   type Edge,
   type Node,
 } from "@xyflow/react";
-import type { ThemeMode } from "../../../../theme";
+import type { ThemeMode } from "../../../settings/lib/theme";
 import type { useSopEditor } from "../use-sop-editor";
 import type { SopFlowData, SopFlowEdgeData } from "../sop-flow-adapter";
 import { routeSopEdges } from "../sop-canvas-routing";

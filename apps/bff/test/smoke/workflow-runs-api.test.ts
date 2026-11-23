@@ -466,4 +466,34 @@ describe("workflow-runs API smoke", () => {
     expect((await request(baseUrl, "/api/approvals/approval-1")).status).toBe(404);
     expect((await request(baseUrl, "/api/approvals/approval-1/decision", "POST", {})).status).toBe(404);
   });
+  it("Agent 草稿独立试跑复用 Workflow 链路，固定配置并隔离发布目录", async () => {
+    const baseUrl = await startBff(await startMockAgent());
+    const created = await request(baseUrl, "/api/agents", "POST", {
+      name: "分析 Agent", skillIds: [], skills: [], systemPrompt: "只分析提供的资料",
+      configuration: { modelId: "analysis-model", allowedToolIds: ["read_file"], outputSchema: { type: "object", properties: { summary: { type: "string" } }, required: ["summary"], additionalProperties: false } },
+    });
+    const profile = (await created.json()).agent;
+    const test = await request(baseUrl, `/api/agents/${profile.id}/tests`, "POST", { inputs: { task: "分析" } });
+    expect(test.status).toBe(200);
+    const result = (await test.json()).data;
+    expect(result.configuration).toMatchObject({ label: "已保存草稿", modelId: "analysis-model", allowedToolIds: ["read_file"] });
+    const dispatched = seen.findLast((item) => item.path === "/workflow-runs")!.body;
+    expect(dispatched.mode).toBe("draft");
+    expect(dispatched.agent_dependencies).toMatchObject([{ agentProfileId: profile.id, modelId: "analysis-model", toolPolicy: { allowedToolIds: ["read_file"] }, instructions: ["只分析提供的资料"], outputSchema: { required: ["summary"] } }]);
+    expect((dispatched.workflow as { nodes: unknown[] }).nodes).toMatchObject([{}, { type: "agent", config: { agentVersionId: result.configuration.versionId, inputBindings: { task: { kind: "literal", value: "分析" } } } }, {}]);
+    expect((await (await request(baseUrl, `/api/agent-versions?agentProfileId=${profile.id}`)).json()).versions).toEqual([]);
+    const history = (await (await request(baseUrl, `/api/agents/${profile.id}/tests`)).json()).data;
+    expect(history[0]).toMatchObject({ configuration: result.configuration, run: { id: result.run.id, inputs: { testInputs: { task: "分析" } } } });
+    const published = (await (await request(baseUrl, `/api/agents/${profile.id}/versions`, "POST", {})).json()).version;
+    await request(baseUrl, `/api/agents/${profile.id}`, "PUT", { systemPrompt: "新的职责", configuration: { modelId: "new-model", allowedToolIds: [], outputSchema: { type: "object" } } });
+    const fixed = await request(baseUrl, `/api/agents/${profile.id}/tests`, "POST", { versionId: published.id, inputs: { task: "复测" } });
+    expect((await fixed.json()).data.configuration).toMatchObject({ label: "v1", modelId: "analysis-model", contentHash: published.contentHash });
+    const invalid = await request(baseUrl, `/api/agents/${profile.id}`, "PUT", { configuration: { outputSchema: { type: "array" } } });
+    expect(invalid.status).toBe(400);
+    expect((await request(baseUrl, `/api/agents/${profile.id}/tests`, "POST", { inputs: [] })).status).toBe(400);
+    const other = (await (await request(baseUrl, "/api/agents", "POST", { name: "Other", systemPrompt: "独立测试", skills: [], skillIds: [] })).json()).agent;
+    expect((await request(baseUrl, `/api/agents/${other.id}/tests`, "POST", { versionId: published.id, inputs: { task: "bad" } })).status).toBe(404);
+    expect((await request(baseUrl, `/api/workflow-runs/${result.run.id}/cancel`, "POST", {})).status).toBe(202);
+  });
+
 });

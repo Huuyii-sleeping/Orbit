@@ -11,9 +11,9 @@
     "start": "node dist/main.js",
     "pretest": "pnpm --filter @orbit/runtime-contracts build",
     "test": "vitest run --no-cache",
-    "sops:health": "tsx src/sops/sops-admin.ts health",
-    "sops:backup": "tsx src/sops/sops-admin.ts backup",
-    "sops:restore": "tsx src/sops/sops-admin.ts restore"
+    "sops:health": "tsx src/entrypoints/sops-admin.ts health",
+    "sops:backup": "tsx src/entrypoints/sops-admin.ts backup",
+    "sops:restore": "tsx src/entrypoints/sops-admin.ts restore"
   },
   "devDependencies": {
     "@types/better-sqlite3": "^7.6.13",

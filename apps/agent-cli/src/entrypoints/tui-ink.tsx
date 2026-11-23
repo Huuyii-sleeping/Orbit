@@ -1,33 +1,15 @@
-import type { ReadStream, WriteStream } from "node:tty";
 import { render } from "ink";
-import type OpenAI from "openai";
+import type { ReadStream, WriteStream } from "node:tty";
+import { createInkRuntimeController } from "../cli/ink/controller.js";
+import { createTerminalRuntime } from "../cli/tui/runtime.js";
 import {
-  createAgentAppRuntime,
-  type AgentAppRuntimeDeps,
-} from "../bootstrap/app-runtime.js";
-import { CliComposerStore } from "../cli/composer.js";
-import { CliPaletteStore } from "../cli/palette.js";
-import { CliTranscriptBrowserStore } from "../cli/transcript.js";
-import type { CliWorkflowMode } from "../cli/workflow.js";
-import { getStaticPromptSource } from "../config.js";
-import { RUNTIME_CONFIG } from "../runtime-config.js";
-import { AgentService } from "../service-api/index.js";
-import { AgentHost } from "../host/agent-host.js";
-import { createMastraAgentService } from "../runtime/mastra-default-service.js";
-import {
-  DEFAULT_RUNTIME_COORDINATION_SERVICE,
-  type RuntimeCoordinationServiceLike,
-} from "../services/runtime-coordination-service.js";
-import {
-  handleTerminalTuiCommand,
-  resolveDaemonTuiService,
   type DaemonTuiServiceResolution,
   type TerminalTuiServiceLike,
-} from "./tui.js";
+} from "../cli/tui/service.js";
+import { RUNTIME_CONFIG } from "../config/runtime-config.js";
 import {
   InkTuiPreviewApp,
   buildInkTuiPreviewSnapshot,
-  createPreviewResponse,
   type InkTuiPreviewMessage,
 } from "../terminal-ui/ink-tui.js";
 
@@ -47,168 +29,12 @@ async function readStdin(input: NodeJS.ReadableStream): Promise<string> {
   return Buffer.concat(chunks).toString("utf8");
 }
 
-function outputToMessage(line: string, output: string): InkTuiPreviewMessage {
-  return {
-    role: line.startsWith("/") || line.startsWith("!") ? "tool" : "assistant",
-    marker: line.startsWith("/") || line.startsWith("!") ? "$" : "*",
-    text: output.trim() || `handled ${line}`,
-    tone: line.startsWith("/") || line.startsWith("!") ? "accent" : "assistant",
-  };
-}
+export { createInkRuntimeController } from "../cli/ink/controller.js";
 
-async function createInkService(input: InkTerminalTuiIo): Promise<{
-  service: TerminalTuiServiceLike;
-  app: AgentAppRuntimeDeps | null;
-  startupIssue: Error | null;
-}> {
-  if (input.service) {
-    return { service: input.service, app: null, startupIssue: null };
-  }
-  const resolved = await (input.resolveDaemonService ?? (() => resolveDaemonTuiService()))().catch(
-    () => null,
-  );
-  if (resolved) {
-    return { service: resolved.service, app: null, startupIssue: null };
-  }
-  try {
-    const app = createAgentAppRuntime();
-    const host = new AgentHost(app);
-    await host.initialize();
-    return { service: await createMastraAgentService(app, host), app, startupIssue: null };
-  } catch (error) {
-    if (error instanceof Error && error.message.includes("Missing environment variable: MODEL_ID")) {
-      const app = createAgentAppRuntime({
-        client: {} as OpenAI,
-        model: "unset-model",
-        promptSource: getStaticPromptSource(),
-      });
-      const host = new AgentHost(app);
-      await host.initialize();
-      return { service: await createMastraAgentService(app, host), app, startupIssue: error };
-    }
-    throw error;
-  }
-}
-
-function asyncEventToMessage(label: string, content: string): InkTuiPreviewMessage {
-  return {
-    role: "system",
-    marker: "$",
-    text: `${label}\n${content}`.trim(),
-    tone: label.includes("error") ? "muted" : "accent",
-  };
-}
-
-export function createInkRuntimeController(input: {
-  service: TerminalTuiServiceLike;
-  app?: AgentAppRuntimeDeps | null;
-  startupIssue: Error | null;
-  runtimeCoordinationService?: RuntimeCoordinationServiceLike;
-}) {
-  const { service, app, startupIssue } = input;
-  const composer = new CliComposerStore();
-  const paletteStore = new CliPaletteStore();
-  const transcriptBrowser = new CliTranscriptBrowserStore();
-  let activeSessionId: string | null = null;
-  let workflow: CliWorkflowMode = "agent";
-  let currentModel = service instanceof AgentService ? process.env.MODEL_ID?.trim() || "unset-model" : "daemon-host";
-  let agentBusy = false;
-
-  const submit = async (line: string): Promise<{ messages: InkTuiPreviewMessage[]; exit: boolean }> => {
-    if (agentBusy) {
-      return {
-        exit: false,
-        messages: [asyncEventToMessage("busy", "Agent is already running another request.")],
-      };
-    }
-    agentBusy = true;
-    const result = await handleTerminalTuiCommand({
-      line,
-      service,
-      activeSessionId,
-      model: currentModel,
-      workflow,
-      startupIssue,
-      setModel: async (model) => {
-        process.env.MODEL_ID = model;
-        currentModel = model;
-        return false;
-      },
-      setWorkflow: (nextWorkflow) => {
-        workflow = nextWorkflow;
-        return true;
-      },
-      composer,
-      paletteStore,
-      transcriptBrowser,
-    }).finally(() => {
-      agentBusy = false;
-    });
-    activeSessionId = result.activeSessionId;
-    workflow = result.workflow;
-    return {
-      exit: result.exit,
-      messages: result.output.trim()
-        ? [outputToMessage(line, result.output)]
-        : [createPreviewResponse(line)],
-    };
-  };
-
-  const runScheduledTick = async (): Promise<InkTuiPreviewMessage[]> => {
-    if (startupIssue) {
-      return [];
-    }
-    const coordination = input.runtimeCoordinationService
-      ?? app?.runtimeCoordinationService
-      ?? DEFAULT_RUNTIME_COORDINATION_SERVICE;
-    await coordination.tickScheduler();
-    const dueCount = await coordination.peekScheduledPromptCount();
-    if (dueCount === 0 || agentBusy) {
-      return [];
-    }
-    const sessions = service.listSessions();
-    let sessionId = activeSessionId ?? sessions.at(-1)?.id ?? null;
-    if (!sessionId) sessionId = (await service.createSession()).id;
-    activeSessionId = sessionId;
-    const messages = [asyncEventToMessage(
-      "scheduled due",
-      `${dueCount} scheduled prompt${dueCount === 1 ? "" : "s"} due now.`,
-    )];
-    agentBusy = true;
-    try {
-      const result = await service.chat({
-        session_id: sessionId,
-        message: "Handle any scheduled prompts that are due now.",
-        include_scheduled_notifications: true,
-      });
-      const session = result.session as { id?: unknown } | undefined;
-      if (typeof session?.id === "string") activeSessionId = session.id;
-      if (result.ok === false) {
-        const error = result.error as { message?: unknown } | undefined;
-        messages.push(asyncEventToMessage("scheduled error", String(error?.message ?? "chat failed")));
-      } else {
-        const assistant = String(result.assistant ?? "").trim();
-        messages.push(asyncEventToMessage(
-          "scheduled",
-          assistant || "Scheduled prompt processed without a text reply.",
-        ));
-      }
-      return messages;
-    } catch (error) {
-      messages.push(asyncEventToMessage(
-        "scheduled error",
-        error instanceof Error ? error.message : String(error),
-      ));
-      return messages;
-    } finally {
-      agentBusy = false;
-    }
-  };
-
-  return { submit, runScheduledTick };
-}
-
-async function runScriptedInput(script: string, submit: (line: string) => Promise<{ messages: InkTuiPreviewMessage[]; exit: boolean }>): Promise<InkTuiPreviewMessage[]> {
+async function runScriptedInput(
+  script: string,
+  submit: (line: string) => Promise<{ messages: InkTuiPreviewMessage[]; exit: boolean }>,
+): Promise<InkTuiPreviewMessage[]> {
   const messages: InkTuiPreviewMessage[] = [];
   for (const rawLine of script.split(/\r?\n/)) {
     const line = rawLine.trim();
@@ -230,13 +56,16 @@ async function runScriptedInput(script: string, submit: (line: string) => Promis
 
 /** Start the Ink/TSX terminal CLI surface. */
 export async function runInkTerminalTui(input: InkTerminalTuiIo): Promise<void> {
-  const { service, app, startupIssue } = await createInkService(input);
-  const controller = createInkRuntimeController({ service, app, startupIssue });
+  const runtime = await createTerminalRuntime(input);
+  const controller = createInkRuntimeController(runtime);
   if (!input.input.isTTY) {
     const script = await readStdin(input.input);
     const extraMessages = await runScriptedInput(script, controller.submit);
     const app = render(
-      <InkTuiPreviewApp snapshot={buildInkTuiPreviewSnapshot({ extraMessages })} interactive={false} />,
+      <InkTuiPreviewApp
+        snapshot={buildInkTuiPreviewSnapshot({ extraMessages })}
+        interactive={false}
+      />,
       {
         stdin: input.input as ReadStream,
         stdout: input.output as WriteStream,
@@ -262,15 +91,24 @@ export async function runInkTerminalTui(input: InkTerminalTuiIo): Promise<void> 
     if (input.errorOutput) {
       renderOptions.stderr = input.errorOutput as WriteStream;
     }
-    const app = render(<InkTuiPreviewApp snapshot={snapshot} onSubmitInput={async (line) => {
-      const result = await controller.submit(line);
-      if (result.exit) {
-        finish();
-      }
-      return result.messages;
-    }} onScheduledTick={controller.runScheduledTick} schedulerIntervalMs={RUNTIME_CONFIG.schedulerPollIntervalMs} onExit={() => finish()} />, {
-      ...renderOptions,
-    });
+    const app = render(
+      <InkTuiPreviewApp
+        snapshot={snapshot}
+        onSubmitInput={async (line) => {
+          const result = await controller.submit(line);
+          if (result.exit) {
+            finish();
+          }
+          return result.messages;
+        }}
+        onScheduledTick={controller.runScheduledTick}
+        schedulerIntervalMs={RUNTIME_CONFIG.schedulerPollIntervalMs}
+        onExit={() => finish()}
+      />,
+      {
+        ...renderOptions,
+      },
+    );
 
     const finish = () => {
       if (settled) {

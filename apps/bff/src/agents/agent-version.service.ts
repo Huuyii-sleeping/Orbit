@@ -1,12 +1,12 @@
 import { Inject, Injectable } from "@nestjs/common";
 import {
   createContentHash,
-  type AgentOutputSchema,
+  normalizeAgentConfiguration,
+  DEFAULT_AGENT_CONFIGURATION,
   type AgentVersion,
-  type AgentVersionSkillBinding,
 } from "@orbit/workflow-core";
-import { AgentProfileService } from "./agent-profile.service.js";
-import { SqliteAgentVersionRepository } from "./sqlite-agent-version.repository.js";
+import { AgentProfileService, type AgentProfile } from "./agent-profile.service.js";
+import { AGENT_VERSION_REPOSITORY, type AgentVersionRepository } from "./agent-version.repository.js";
 
 /** AgentVersion 发布或查询找不到产品实体。 */
 export class AgentVersionNotFoundError extends Error {
@@ -17,13 +17,8 @@ export class AgentVersionNotFoundError extends Error {
   }
 }
 
-/** 首轮 AgentVersion 的固定文本输出契约。 */
-export const DEFAULT_AGENT_VERSION_OUTPUT_SCHEMA: AgentOutputSchema = {
-  type: "object",
-  properties: { text: { type: "string" } },
-  required: ["text"],
-  additionalProperties: false,
-};
+/** 兼容既有调用方的默认文本输出契约。 */
+export const DEFAULT_AGENT_VERSION_OUTPUT_SCHEMA = DEFAULT_AGENT_CONFIGURATION.outputSchema;
 
 function asRecord(value: unknown): Record<string, unknown> {
   return value && typeof value === "object" && !Array.isArray(value) ? value as Record<string, unknown> : {};
@@ -38,7 +33,7 @@ function cleanText(value: unknown, fallback = "", limit = 500): string {
 export class AgentVersionService {
   constructor(
     @Inject(AgentProfileService) private readonly profiles: AgentProfileService,
-    @Inject(SqliteAgentVersionRepository) private readonly versions: SqliteAgentVersionRepository,
+    @Inject(AGENT_VERSION_REPOSITORY) private readonly versions: AgentVersionRepository,
   ) {}
 
   /** 发布请求仅接受审计元数据，运行字段全部来自服务端 profile 快照。 */
@@ -46,16 +41,7 @@ export class AgentVersionService {
     const profile = await this.profiles.getAgent(agentProfileId);
     if (!profile) throw new AgentVersionNotFoundError("profile", agentProfileId);
     const metadata = asRecord(input);
-    const skillBindings: AgentVersionSkillBinding[] = profile.skills.map((skill) => ({ ...skill }));
-    const snapshot = {
-      agentProfileId: profile.id,
-      name: profile.name,
-      description: profile.description,
-      instructions: [profile.systemPrompt],
-      toolPolicy: { allowedToolIds: [] as string[] },
-      skillPolicy: { bindings: skillBindings },
-      outputSchema: structuredClone(DEFAULT_AGENT_VERSION_OUTPUT_SCHEMA),
-    };
+    const snapshot = this.snapshot(profile);
     return this.versions.publish({
       ...snapshot,
       contentHash: await createContentHash(snapshot),
@@ -63,6 +49,26 @@ export class AgentVersionService {
       releaseNotes: cleanText(metadata.releaseNotes, "", 500),
       createdAt: Date.now(),
     });
+  }
+
+  /** 用于独立试跑的草稿快照；不写入发布版本目录。 */
+  async draftSnapshot(agentProfileId: string): Promise<AgentVersion> {
+    const profile = await this.profiles.getAgent(agentProfileId);
+    if (!profile) throw new AgentVersionNotFoundError("profile", agentProfileId);
+    const snapshot = this.snapshot(profile);
+    const contentHash = await createContentHash(snapshot);
+    return { ...snapshot, id: `draft-${contentHash}`, version: 1, contentHash, createdAt: Date.now(), createdBy: "local-user", releaseNotes: "草稿试跑" };
+  }
+
+  private snapshot(profile: AgentProfile) {
+    const config = normalizeAgentConfiguration(profile.configuration);
+    return {
+      agentProfileId: profile.id, name: profile.name, description: profile.description,
+      instructions: [profile.systemPrompt], modelId: config.modelId,
+      toolPolicy: { allowedToolIds: config.allowedToolIds },
+      skillPolicy: { bindings: profile.skills.map((skill) => ({ ...skill })) },
+      outputSchema: config.outputSchema,
+    };
   }
 
   /** 列出全部版本，或按 AgentProfile 过滤。 */

@@ -1,4 +1,4 @@
-import { getPrivacyConfig } from "../runtime-config.js";
+import { getPrivacyConfig } from "../config/runtime-config.js";
 import { LOCAL_ARTIFACT_CONTRACTS, type LocalArtifactKind } from "../security/local-retention.js";
 import { createAgentBridgeManifest } from "../service-api/bridge.js";
 

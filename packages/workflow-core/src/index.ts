@@ -18,3 +18,5 @@ export * from "./compiler/contracts.js";
 export * from "./compiler/schema.js";
 export * from "./compiler/ir-schema.js";
 export * from "./compiler/compile.js";
+export * from "./contracts/agent-configuration.js";
+export * from "./contracts/agent-testing.js";

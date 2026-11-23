@@ -1,6 +1,6 @@
 import { Body, Controller, Get, Inject, Param, Post, Req, Res } from "@nestjs/common";
 import type { IncomingMessage, ServerResponse } from "node:http";
-import { errorPayload, writeJson } from "../http-utils.js";
+import { errorPayload, writeJson } from "../http/http-utils.js";
 import { WorkflowRunControlError } from "./workflow-runs.errors.js";
 import { WorkflowRunsService } from "./workflow-runs.service.js";
 import type { ResumeWorkflowRunInput, StartWorkflowRunInput } from "./workflow-runs.types.js";

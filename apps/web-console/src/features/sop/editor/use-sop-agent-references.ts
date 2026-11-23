@@ -1,6 +1,6 @@
 import { getErrorMessage } from "../../../lib/errors/error-factory";
 import { useCallback, useEffect, useState } from "react";
-import { fetchAgentVersions } from "../../../api";
+import { fetchAgentVersions } from "../../../api/index";
 import type { AgentVersionReferenceCatalog } from "../nodes/types";
 
 /** 按需加载 Agent 节点可选择的不可变发布版本。 */
@@ -22,7 +22,7 @@ export function useSopAgentReferences(active: boolean): AgentVersionReferenceCat
       });
   }, []);
   useEffect(() => {
-    if (active && state === "idle") refresh();
-  }, [active, refresh, state]);
+    if (active) refresh();
+  }, [active, refresh]);
   return { state, options, message, refresh };
 }

@@ -1,5 +1,5 @@
 import { lazy, Suspense, useEffect, useState } from "react";
-import { appRouteFromPathname } from "../app-route";
+import { appRouteFromPathname } from "./app-route";
 
 const Workspace = lazy(() => import("./App").then((module) => ({ default: module.App })));
 const Home = lazy(() => import("../pages/LandingPage").then((module) => ({ default: module.LandingPage })));

@@ -1,15 +1,13 @@
 import { Body, Controller, Get, Inject, Post, Res } from "@nestjs/common";
 import type { ServerResponse } from "node:http";
-import { RuntimePortError, type ToolExecutionPort } from "@orbit/runtime-contracts";
 import type { AgentService } from "../../service-api/index.js";
 import { writeJson } from "../http.js";
-import { AGENT_SERVICE, TOOL_EXECUTION_PORT } from "../tokens.js";
+import { AGENT_TOOLS_SERVICE } from "../tokens.js";
 
 @Controller("tools")
 export class ToolController {
   constructor(
-    @Inject(AGENT_SERVICE) private readonly service: AgentService,
-    @Inject(TOOL_EXECUTION_PORT) private readonly runtime: ToolExecutionPort,
+    @Inject(AGENT_TOOLS_SERVICE) private readonly service: Pick<AgentService, "toolsMetadata" | "runToolByName">,
   ) {}
 
   @Get()
@@ -30,29 +28,7 @@ export class ToolController {
       });
       return;
     }
-    const argumentsJson = String(body.arguments_json ?? "");
-    let input: unknown = {};
-    try {
-      input = JSON.parse(argumentsJson || "{}") as unknown;
-    } catch {
-      input = {};
-    }
-    try {
-      const result = await this.runtime.execute({
-        toolId: toolName,
-        input,
-        ownerId: "local-direct-api",
-        executor: { kind: "direct" },
-        requestContext: { argumentsJson },
-      });
-      const output = typeof result.output === "string" ? result.output : JSON.stringify(result.output);
-      writeJson(res, 200, { ok: true, output });
-    } catch (error) {
-      if (error instanceof RuntimePortError && typeof error.details.rawOutput === "string") {
-        writeJson(res, 200, { ok: true, output: error.details.rawOutput });
-        return;
-      }
-      throw error;
-    }
+    const output = await this.service.runToolByName(toolName, String(body.arguments_json ?? ""));
+    writeJson(res, 200, { ok: true, output });
   }
 }

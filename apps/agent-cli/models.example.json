@@ -1,0 +1,33 @@
+{
+  "providers": {
+    "qwen": {
+      "baseUrl": "https://dashscope.aliyuncs.com/compatible-mode/v1",
+      "apiKeyEnv": "DASHSCOPE_API_KEY",
+      "provider": "openai-compatible"
+    },
+    "deepseek": {
+      "baseUrl": "https://api.deepseek.com/v1",
+      "apiKeyEnv": "DEEPSEEK_API_KEY",
+      "provider": "deepseek"
+    },
+    "local": {
+      "baseUrl": "http://127.0.0.1:11434/v1",
+      "provider": "openai-compatible"
+    }
+  },
+  "models": {
+    "writer": {
+      "provider": "qwen",
+      "modelId": "qwen-plus"
+    },
+    "reviewer": {
+      "provider": "anthropic",
+      "modelId": "claude-sonnet-4-5"
+    },
+    "reasoner": {
+      "provider": "deepseek",
+      "modelId": "deepseek-reasoner",
+      "supportsTemperature": false
+    }
+  }
+}

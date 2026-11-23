@@ -5,17 +5,19 @@ import {
   requiredWorkflowStageECapabilities,
   stableSerialize,
   type AgentVersion,
+  type AgentVersionResolver,
   type WorkflowNode,
+  type WorkflowDraft,
   type WorkflowRunMode,
   type WorkflowVersion,
 } from "@orbit/workflow-core";
-import { AgentProxyService, type ProxyResult } from "../agent-proxy.service.js";
-import { SqliteAgentVersionRepository } from "../agents/sqlite-agent-version.repository.js";
-import { applyCommonHeaders, writeJson } from "../http-utils.js";
-import { SqliteSopsRepository } from "../sops/sqlite-sops.repository.js";
+import { AgentProxyService, type ProxyResult } from "../runtime-connection/agent-proxy.service.js";
+import { AGENT_VERSION_REPOSITORY } from "../agents/agent-version.repository.js";
+import { applyCommonHeaders, writeJson } from "../http/http-utils.js";
+import { SOPS_REPOSITORY, type SopsRepository } from "../sops/sops.repository.js";
 import { WorkflowRunControlError } from "./workflow-runs.errors.js";
 import { WorkflowSseDecoder } from "./sse-decoder.js";
-import { SqliteWorkflowRunsRepository } from "./sqlite-workflow-runs.repository.js";
+import { WORKFLOW_RUNS_REPOSITORY, type WorkflowRunsRepository } from "./workflow-runs.types.js";
 import type { ResumeWorkflowRunInput, StartWorkflowRunInput, WorkflowRunSnapshot } from "./workflow-runs.types.js";
 
 function asObject(value: unknown): Record<string, unknown> {
@@ -52,10 +54,10 @@ function runFrom(result: ProxyResult): WorkflowRunSnapshot {
 @Injectable()
 export class WorkflowRunsService {
   constructor(
-    @Inject(AgentProxyService) private readonly agent: AgentProxyService,
-    @Inject(SqliteSopsRepository) private readonly sops: SqliteSopsRepository,
-    @Inject(SqliteWorkflowRunsRepository) private readonly runs: SqliteWorkflowRunsRepository,
-    @Inject(SqliteAgentVersionRepository) private readonly agentVersions: SqliteAgentVersionRepository,
+    @Inject(AgentProxyService) private readonly agent: Pick<AgentProxyService, "startWorkflowRun" | "workflowRun" | "cancelWorkflowRun" | "resumeWorkflowRun" | "workflowEventStream">,
+    @Inject(SOPS_REPOSITORY) private readonly sops: Pick<SopsRepository, "getDraft" | "getVersion">,
+    @Inject(WORKFLOW_RUNS_REPOSITORY) private readonly runs: WorkflowRunsRepository,
+    @Inject(AGENT_VERSION_REPOSITORY) private readonly agentVersions: AgentVersionResolver,
   ) {}
 
   /** 按草稿或发布版本启动运行；客户端不能直接提交生产快照。 */
@@ -69,17 +71,26 @@ export class WorkflowRunsService {
     const workflow = mode === "production"
       ? this.requireVersion(workflowId, input.versionId)
       : this.resolveDraft(workflowId, input.draft);
+    return this.launch(workflow, input, this.agentDependencies(workflow.nodes));
+  }
+
+  /** 只允许服务端组装的 Agent 测试快照进入普通草稿执行路径。 */
+  async startAgentTest(workflow: WorkflowDraft, version: AgentVersion, inputs: Record<string, unknown>): Promise<WorkflowRunSnapshot> {
+    return this.launch(workflow, { workflowId: workflow.id, mode: "draft", inputs }, [version]);
+  }
+
+  private async launch(workflow: WorkflowDraft | WorkflowVersion, input: StartWorkflowRunInput, agentDependencies: AgentVersion[]) {
     const workflowDependencies = this.workflowDependencies(workflow.nodes);
     const result = await this.agent.startWorkflowRun({
       workflow,
       workflow_dependencies: workflowDependencies,
-      agent_dependencies: this.agentDependencies(workflow.nodes),
+      agent_dependencies: agentDependencies,
       approval_policy_ids: this.approvalPolicyIds(workflow.nodes),
       required_runtime_capabilities: requiredWorkflowStageECapabilities([
         ...workflow.nodes,
         ...workflowDependencies.flatMap((dependency) => dependency.nodes),
       ]),
-      mode,
+      mode: input.mode,
       inputs: asObject(input.inputs),
       target_node_id: input.targetNodeId,
       node_inputs: asObject(input.nodeInputs),
@@ -87,6 +98,11 @@ export class WorkflowRunsService {
     const run = runFrom(result);
     this.runs.saveRun(run);
     return run;
+  }
+
+  /** 读取独立 Agent 试跑的近期索引，状态详情仍以 Runtime 查询为准。 */
+  listAgentTests(agentId: string) {
+    return this.runs.listByWorkflow(`agent-test-${agentId}`);
   }
 
   /** 查询 Agent 最新快照并同步本地索引。 */

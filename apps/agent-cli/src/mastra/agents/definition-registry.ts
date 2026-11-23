@@ -14,6 +14,8 @@ export type OrbitMastraAgentDefinition = {
   name: string;
   instructions: string[];
   model: MastraModelConfig;
+  /** SDK 模型的稳定配置摘要，包含连接与凭据变更。 */
+  modelConfigKey?: string;
   tools: ToolsInput;
   toolIds: string[];
   skillIds: string[];
@@ -46,30 +48,39 @@ function stableValue(value: unknown): unknown {
 }
 
 function definitionCacheKey(definition: OrbitMastraAgentDefinition): string {
-  const serialized = JSON.stringify(stableValue({
-    adapterVersion: MASTRA_AGENT_DEFINITION_ADAPTER_VERSION,
-    agentId: definition.agentId,
-    agentVersion: definition.agentVersion,
-    instructions: definition.instructions,
-    model: definition.model,
-    toolIds: [...definition.toolIds].sort(),
-    toolDefinitions: Object.entries(definition.tools).map(([key, tool]) => {
-      const candidate = tool as {
-        id?: string;
-        description?: string;
-        inputSchema?: Parameters<typeof standardSchemaToJSONSchema>[0];
-        outputSchema?: Parameters<typeof standardSchemaToJSONSchema>[0];
-      };
-      return {
-        key,
-        id: candidate.id,
-        description: candidate.description,
-        inputSchema: candidate.inputSchema ? standardSchemaToJSONSchema(candidate.inputSchema) : undefined,
-        outputSchema: candidate.outputSchema ? standardSchemaToJSONSchema(candidate.outputSchema) : undefined,
-      };
-    }).sort((left, right) => left.key.localeCompare(right.key)),
-    skillIds: [...definition.skillIds].sort(),
-  }));
+  const serialized = JSON.stringify(
+    stableValue({
+      adapterVersion: MASTRA_AGENT_DEFINITION_ADAPTER_VERSION,
+      agentId: definition.agentId,
+      agentVersion: definition.agentVersion,
+      instructions: definition.instructions,
+      model: definition.modelConfigKey ?? definition.model,
+      toolIds: [...definition.toolIds].sort(),
+      toolDefinitions: Object.entries(definition.tools)
+        .map(([key, tool]) => {
+          const candidate = tool as {
+            id?: string;
+            description?: string;
+            inputSchema?: Parameters<typeof standardSchemaToJSONSchema>[0];
+            outputSchema?: Parameters<typeof standardSchemaToJSONSchema>[0];
+          };
+          return {
+            key,
+            id: candidate.id,
+            description: candidate.description,
+            inputSchema: candidate.inputSchema
+              ? standardSchemaToJSONSchema(candidate.inputSchema)
+              : undefined,
+            outputSchema: candidate.outputSchema
+              ? standardSchemaToJSONSchema(candidate.outputSchema)
+              : undefined,
+          };
+        })
+        .sort((left, right) => left.key.localeCompare(right.key)),
+      skillIds: [...definition.skillIds].sort(),
+      memoryEnabled: Boolean(definition.memory),
+    }),
+  );
   return createHash("sha256").update(serialized).digest("hex");
 }
 

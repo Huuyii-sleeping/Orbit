@@ -1,6 +1,5 @@
-import { describe, expect, it, vi } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import type { ChatCompletionTool } from "openai/resources/chat/completions";
-import type OpenAI from "openai";
 import { createAgentAppRuntime } from "../../../src/bootstrap/app-runtime.js";
 import type { DeliveryServiceLike } from "../../../src/services/delivery-service.js";
 import type { HookServiceLike } from "../../../src/services/hook-service.js";
@@ -8,7 +7,21 @@ import type { ModelPolicyServiceLike } from "../../../src/services/model-policy-
 import type { ObservabilityServiceLike } from "../../../src/services/observability-service.js";
 import type { StaticPromptSource } from "../../../src/prompt/types.js";
 
+afterEach(() => vi.unstubAllEnvs());
+
 describe("bootstrap/app-runtime", () => {
+  it("没有 OpenAI 凭据也能组装配置和服务，客户端只由执行适配层创建", () => {
+    vi.stubEnv("OPENAI_API_KEY", "");
+    const app = createAgentAppRuntime({
+      model: "configured-model",
+      promptSource: { core: "test", tools: [], skills: [], rules: [] },
+    });
+    expect(app.model).toBe("configured-model");
+    expect(app.toolService.listToolMetadata).toBeTypeOf("function");
+    expect(app).not.toHaveProperty("client");
+    expect(app).not.toHaveProperty("runtimeServices");
+  });
+
   it("uses explicit overrides when building app runtime deps", () => {
     const tools = [{ type: "function", function: { name: "echo", parameters: { type: "object", properties: {} } } }] as ChatCompletionTool[];
     const toolService = {
@@ -65,7 +78,6 @@ describe("bootstrap/app-runtime", () => {
       })),
     };
     const runtime = createAgentAppRuntime({
-      client: {} as OpenAI,
       model: "test-model",
       promptSource,
       toolService,

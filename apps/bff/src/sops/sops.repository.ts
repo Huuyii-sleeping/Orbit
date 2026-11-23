@@ -19,3 +19,6 @@ export interface SopsRepository {
   getTemplate(id: string, version?: number): SopTemplate | null;
   deleteTemplate(id: string): boolean;
 }
+
+/** SOP 持久化注入标识，由 SOP 模块提供并向运行控制导出。 */
+export const SOPS_REPOSITORY = Symbol("SOPS_REPOSITORY");

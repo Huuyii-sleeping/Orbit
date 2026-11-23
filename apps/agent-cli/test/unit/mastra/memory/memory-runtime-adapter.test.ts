@@ -35,6 +35,38 @@ defineMemoryRuntimePortContract("Mastra", async () => ({
 }));
 
 describe("mastra/memory/memory-runtime-adapter", () => {
+  it("压缩分支保留原始工具消息结构、验证所有权且在重启后可读取摘要", async () => {
+    const root = await mkdtemp(path.join(tmpdir(), "orbit-memory-compact-restart-"));
+    roots.push(root);
+    const first = await getOrCreateMastraRuntime({ root, persistenceEnabled: true });
+    const adapter = new MastraMemoryRuntimeAdapter(first.memory, { root, persistenceEnabled: true });
+    const owner = { ownerId: "owner-a", resourceId: "resource-a", threadId: "original" };
+    try {
+      await adapter.createThread({ ...owner, id: "original" });
+      const messages: MastraDBMessage[] = [{
+        id: "native-tool-message", role: "assistant", createdAt: new Date(10), threadId: "original", resourceId: "resource-a",
+        content: { format: 2, parts: [{ type: "tool-invocation", toolInvocation: {
+          state: "result", toolCallId: "call-1", toolName: "echo", args: { value: "hello" }, result: { text: "hello" },
+        } }] },
+      }];
+      await first.memory.saveMessages({ messages });
+      await expect(adapter.compactThread({ ...owner, ownerId: "other", summary: "summary", retainedMessageIds: ["native-tool-message"] })).rejects.toMatchObject({ code: "RUNTIME_OWNERSHIP_CONFLICT" });
+      await expect(adapter.compactThread({ ...owner, summary: "summary", retainedMessageIds: ["missing"] })).rejects.toThrow("不属于");
+      const thread = await adapter.compactThread({ ...owner, summary: "durable summary", retainedMessageIds: ["native-tool-message"] });
+      const copied = await first.memory.recall({ threadId: thread.id, resourceId: "resource-a", perPage: false });
+      expect(copied.messages[0]?.content).toEqual(messages[0]!.content);
+      expect(copied.messages[0]?.id).not.toBe("native-tool-message");
+      expect((await adapter.listMessages(owner)).items).toHaveLength(1);
+      await shutdownMastraRuntime({ root, persistenceEnabled: true });
+      const restored = await getOrCreateMastraRuntime({ root, persistenceEnabled: true });
+      const memory = new MastraMemoryRuntimeAdapter(restored.memory, { root, persistenceEnabled: true });
+      expect((await memory.getThread({ ...owner, threadId: thread.id }))?.metadata.contextSummary).toBe("durable summary");
+      expect((await memory.listMessages({ ...owner, threadId: thread.id })).items).toHaveLength(1);
+    } finally {
+      await shutdownMastraRuntime({ root, persistenceEnabled: true });
+    }
+  });
+
   it("首轮只启用 message history，并显式关闭高级 Memory", () => {
     expect(ORBIT_MASTRA_MEMORY_OPTIONS).toEqual({
       lastMessages: 20,

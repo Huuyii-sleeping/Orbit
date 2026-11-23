@@ -1,14 +1,12 @@
 import * as process from "node:process";
-import { createAgentAppRuntime } from "../bootstrap/app-runtime.js";
+import { createAgentAppRuntime, type AgentAppRuntimeDeps } from "../bootstrap/app-runtime.js";
 import { AgentHost } from "../host/agent-host.js";
-import { AgentService } from "../service-api/index.js";
-import { runServer, type AgentServerLike } from "../service-api/server.js";
-import { createMastraAgentService } from "../runtime/mastra-default-service.js";
+import { runServer, type AgentServerLike } from "./server.js";
+import { createMastraAgentService } from "../bootstrap/mastra-service.js";
 import { DaemonLock } from "./daemon-lock.js";
 
 type DaemonHost = {
   initialize(): Promise<void>;
-  runtime?(): ConstructorParameters<typeof AgentService>[0];
   listSessions?(): unknown[];
 };
 
@@ -34,6 +32,7 @@ type DaemonIo = {
   output?: NodeJS.WritableStream;
   errorOutput?: NodeJS.WritableStream;
   host?: DaemonHost;
+  app?: AgentAppRuntimeDeps;
   startHttpServer?: DaemonServerStarter;
   waitForShutdown?: DaemonShutdownWaiter;
   signalSource?: DaemonSignalSource;
@@ -135,7 +134,7 @@ export async function runDaemon(
   const lock = new DaemonLock(io.runtimeRoot);
   await lock.acquire();
   try {
-    const host = io.host ?? new AgentHost(createAgentAppRuntime());
+    const host = io.host ?? new AgentHost();
     await host.initialize();
     const sessionCount = host.listSessions?.().length;
     output.write(
@@ -146,12 +145,12 @@ export async function runDaemon(
     const startHttpServer =
       io.startHttpServer ??
       (async ({ host: activeHost, output: activeOutput }) => {
-        if (!activeHost.runtime) {
-          throw new Error("daemon host runtime is required to start the HTTP service");
+        if (!(activeHost instanceof AgentHost)) {
+          throw new Error("daemon HTTP service requires an AgentHost or an explicit startHttpServer adapter");
         }
         const service = await createMastraAgentService(
-          activeHost.runtime(),
-          activeHost as AgentHost,
+          io.app ?? createAgentAppRuntime(),
+          activeHost,
         );
         return runServer({ service, output: activeOutput });
       });

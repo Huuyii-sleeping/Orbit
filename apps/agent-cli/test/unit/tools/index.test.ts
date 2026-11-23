@@ -16,7 +16,7 @@ describe("tools/index", () => {
 
   it("loads a discovered local skill through the base tool surface", async () => {
     const output = JSON.parse(
-      await runToolByName("load_skill", JSON.stringify({ name: "openspec-apply-change" })),
+      await runToolByName("load_skill", JSON.stringify({ name: "code-workspace" })),
     ) as {
       ok?: boolean;
       skill?: {
@@ -30,10 +30,10 @@ describe("tools/index", () => {
     };
 
     expect(output.ok).toBe(true);
-    expect(output.skill?.name).toBe("openspec-apply-change");
-    expect(output.skill?.base_dir).toContain("openspec-apply-change");
+    expect(output.skill?.name).toBe("code-workspace");
+    expect(output.skill?.base_dir).toContain("code-workspace");
     expect(output.skill?.content).toContain("Base directory for this skill:");
-    expect(output.skill?.content).toContain("Implement tasks from an OpenSpec change");
+    expect(output.skill?.content).toContain("# Code Workspace");
     expect(output.skill?.source_type).toBeDefined();
     expect(output.skill?.allowed_tools).toBeDefined();
     expect(output.skill?.can_run_shell).toBeDefined();

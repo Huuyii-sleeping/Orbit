@@ -1,20 +1,22 @@
 import { Readable, Writable } from "node:stream";
-import { describe, expect, it, vi } from "vitest";
+import { Client } from "@modelcontextprotocol/sdk/client/index.js";
+import { InMemoryTransport } from "@modelcontextprotocol/sdk/inMemory.js";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import {
-  AGENT_MCP_TOOLS,
-  handleAgentMcpRequest,
+  createAgentMcpServer,
   runAgentMcpServer,
   type AgentMcpServiceLike,
 } from "../../../src/entrypoints/mcp-server.js";
+import { AgentHost } from "../../../src/host/agent-host.js";
+import { createAgentAppRuntime } from "../../../src/bootstrap/app-runtime.js";
+import { shutdownMastraRuntime } from "../../../src/mastra/instance/factory.js";
 
 function createService(): AgentMcpServiceLike {
   return {
-    createSession: vi.fn(() => ({ id: "new-session" })),
-    listSessions: vi.fn(() => [{ id: "s01", messageCount: 2 }]),
-    getSessionDetail: vi.fn((sessionId: string) =>
-      sessionId === "s01" ? { id: "s01", messages: [{ role: "user", content: "hello" }] } : null,
-    ),
-    toolsMetadata: vi.fn(async () => [{ name: "read_file", target: "base", description: "Read" }]),
+    createSession: vi.fn(async () => ({ id: "new-session" })),
+    listSessions: vi.fn(() => [{ id: "s01" }]),
+    getSessionDetail: vi.fn(async (id) => (id === "s01" ? { id, messages: [] } : null)),
+    toolsMetadata: vi.fn(async () => [{ name: "read_file" }]),
     chat: vi.fn(async (input) => ({
       ok: true,
       assistant: `reply:${input.message}`,
@@ -23,195 +25,104 @@ function createService(): AgentMcpServiceLike {
   };
 }
 
+afterEach(async () => {
+  await shutdownMastraRuntime();
+});
+
 describe("entrypoints/mcp-server", () => {
-  it("responds to initialize with MCP server capabilities", async () => {
-    const response = await handleAgentMcpRequest(createService(), {
-      jsonrpc: "2.0",
-      id: 1,
-      method: "initialize",
-      params: {},
-    });
-
-    expect(response).toMatchObject({
-      jsonrpc: "2.0",
-      id: 1,
-      result: {
-        serverInfo: { name: "agent-cli" },
-        capabilities: { tools: { listChanged: false } },
-      },
-    });
-  });
-
-  it("lists the agent chat tool", async () => {
-    const response = await handleAgentMcpRequest(createService(), {
-      jsonrpc: "2.0",
-      id: "tools",
-      method: "tools/list",
-      params: {},
-    });
-
-    expect(response?.result).toEqual({ tools: AGENT_MCP_TOOLS });
-  });
-
-  it("keeps JSON-RPC id zero as a response id", async () => {
-    const response = await handleAgentMcpRequest(createService(), {
-      jsonrpc: "2.0",
-      id: 0,
-      method: "tools/list",
-      params: {},
-    });
-
-    expect(response?.id).toBe(0);
-  });
-
-  it("routes agent_chat calls through AgentService.chat", async () => {
+  it("通过标准 MCP 客户端握手、列举工具并调用共享服务，保留结构化结果", async () => {
     const service = createService();
-    const response = await handleAgentMcpRequest(service, {
-      jsonrpc: "2.0",
-      id: 2,
-      method: "tools/call",
-      params: {
+    const server = createAgentMcpServer(service);
+    const client = new Client({ name: "orbit-test", version: "1" });
+    const [clientTransport, serverTransport] = InMemoryTransport.createLinkedPair();
+    await server.getServer().connect(serverTransport);
+    try {
+      await client.connect(clientTransport);
+      expect(client.getServerVersion()?.name).toBe("agent-cli");
+      expect((await client.listTools()).tools.map((tool) => tool.name).sort()).toEqual([
+        "agent_chat",
+        "agent_create_session",
+        "agent_get_session",
+        "agent_list_sessions",
+        "agent_list_tools",
+      ]);
+      const chat = await client.callTool({
         name: "agent_chat",
         arguments: { message: "hello", session_id: "s01" },
-      },
-    });
-
-    expect(service.chat).toHaveBeenCalledWith({ message: "hello", session_id: "s01" });
-    expect(response?.result).toMatchObject({
-      content: [{ type: "text" }],
-      structuredContent: {
-        ok: true,
-        assistant: "reply:hello",
-        session: { id: "s01" },
-      },
-      isError: false,
-    });
+      });
+      expect(chat).toMatchObject({
+        isError: false,
+        structuredContent: { ok: true, assistant: "reply:hello" },
+      });
+      expect(service.chat).toHaveBeenCalledWith({ message: "hello", session_id: "s01" });
+      expect(await client.callTool({ name: "agent_create_session", arguments: {} })).toMatchObject({
+        structuredContent: { session: { id: "new-session" } },
+      });
+      expect(
+        await client.callTool({ name: "agent_get_session", arguments: { session_id: "s01" } }),
+      ).toMatchObject({ structuredContent: { session: { id: "s01" } } });
+      expect(await client.callTool({ name: "agent_list_sessions", arguments: {} })).toMatchObject({
+        structuredContent: { sessions: [{ id: "s01" }] },
+      });
+      expect(await client.callTool({ name: "agent_list_tools", arguments: {} })).toMatchObject({
+        structuredContent: { tools: [{ name: "read_file" }] },
+      });
+    } finally {
+      await client.close();
+      await server.close();
+    }
   });
 
-  it("routes session and tool management calls through AgentService", async () => {
+  it("由 Mastra 拒绝非法参数、未知工具和业务失败，不调用错误的业务入口", async () => {
     const service = createService();
-    const created = await handleAgentMcpRequest(service, {
-      jsonrpc: "2.0",
-      id: 4,
-      method: "tools/call",
-      params: { name: "agent_create_session", arguments: {} },
-    });
-    const sessions = await handleAgentMcpRequest(service, {
-      jsonrpc: "2.0",
-      id: 5,
-      method: "tools/call",
-      params: { name: "agent_list_sessions", arguments: {} },
-    });
-    const transcript = await handleAgentMcpRequest(service, {
-      jsonrpc: "2.0",
-      id: 6,
-      method: "tools/call",
-      params: { name: "agent_get_session", arguments: { session_id: "s01" } },
-    });
-    const tools = await handleAgentMcpRequest(service, {
-      jsonrpc: "2.0",
-      id: 7,
-      method: "tools/call",
-      params: { name: "agent_list_tools", arguments: {} },
-    });
-
-    expect(created?.result).toMatchObject({ structuredContent: { ok: true, session: { id: "new-session" } } });
-    expect(sessions?.result).toMatchObject({ structuredContent: { ok: true, sessions: [{ id: "s01" }] } });
-    expect(transcript?.result).toMatchObject({ structuredContent: { ok: true, session: { id: "s01" } } });
-    expect(tools?.result).toMatchObject({ structuredContent: { ok: true, tools: [{ name: "read_file" }] } });
+    const server = createAgentMcpServer(service);
+    const client = new Client({ name: "orbit-test", version: "1" });
+    const [clientTransport, serverTransport] = InMemoryTransport.createLinkedPair();
+    await server.getServer().connect(serverTransport);
+    try {
+      await client.connect(clientTransport);
+      expect(await client.callTool({ name: "agent_chat", arguments: {} })).toMatchObject({
+        isError: true,
+      });
+      expect(service.chat).not.toHaveBeenCalled();
+      expect(await client.callTool({ name: "missing", arguments: {} })).toMatchObject({
+        isError: true,
+      });
+      expect(
+        await client.callTool({ name: "agent_get_session", arguments: { session_id: "missing" } }),
+      ).toMatchObject({
+        isError: true,
+        content: [expect.objectContaining({ text: expect.stringContaining("SESSION_NOT_FOUND") })],
+      });
+      vi.mocked(service.chat).mockResolvedValueOnce({
+        ok: false,
+        error: { code: "MODEL_UNAVAILABLE" },
+      });
+      expect(
+        await client.callTool({ name: "agent_chat", arguments: { message: "hello" } }),
+      ).toMatchObject({
+        isError: true,
+        content: [expect.objectContaining({ text: expect.stringContaining("MODEL_UNAVAILABLE") })],
+      });
+    } finally {
+      await client.close();
+      await server.close();
+    }
   });
 
-  it("awaits async session creation and transcript lookup for daemon-backed services", async () => {
-    const service: AgentMcpServiceLike = {
-      createSession: vi.fn(async () => ({ id: "async-session" })),
-      listSessions: vi.fn(() => [{ id: "async-session", messageCount: 0 }]),
-      getSessionDetail: vi.fn(async (sessionId: string) =>
-        sessionId === "async-session" ? { id: sessionId, messages: [] } : null,
-      ),
-      toolsMetadata: vi.fn(async () => []),
-      chat: vi.fn(async () => ({ ok: true, assistant: "reply:async" })),
-    };
-
-    const created = await handleAgentMcpRequest(service, {
-      jsonrpc: "2.0",
-      id: 8,
-      method: "tools/call",
-      params: { name: "agent_create_session", arguments: {} },
-    });
-    const transcript = await handleAgentMcpRequest(service, {
-      jsonrpc: "2.0",
-      id: 9,
-      method: "tools/call",
-      params: { name: "agent_get_session", arguments: { session_id: "async-session" } },
-    });
-
-    expect(created?.result).toMatchObject({
-      structuredContent: { ok: true, session: { id: "async-session" } },
-    });
-    expect(transcript?.result).toMatchObject({
-      structuredContent: { ok: true, session: { id: "async-session" } },
-    });
-  });
-
-  it("rejects unknown tools without calling the service", async () => {
-    const service = createService();
-    const response = await handleAgentMcpRequest(service, {
-      jsonrpc: "2.0",
-      id: 3,
-      method: "tools/call",
-      params: {
-        name: "missing",
-        arguments: { message: "hello" },
-      },
-    });
-
-    expect(service.chat).not.toHaveBeenCalled();
-    expect(response).toMatchObject({
-      id: 3,
-      error: {
-        code: -32602,
-        message: "unknown MCP tool: missing",
-      },
-    });
-  });
-
-  it("initializes the provided host before serving stdio MCP traffic", async () => {
-    const host = {
-      initialize: vi.fn(async () => undefined),
-      runtime: vi.fn(() => ({})),
-    };
-    const output = new Writable({
-      write(_chunk, _encoding, callback) {
-        callback();
-      },
-    });
-
-    await runAgentMcpServer({
-      input: Readable.from([]),
-      output,
-      host: host as {
-        initialize(): Promise<void>;
-        runtime(): unknown;
-      },
-    });
-
-    expect(host.initialize).toHaveBeenCalledTimes(1);
-  });
-
-  it("prefers a resolved daemon-backed service before building an embedded runtime", async () => {
+  it("初始化显式宿主，或优先使用已有 daemon 服务", async () => {
+    const output = () =>
+      new Writable({
+        write(_chunk, _encoding, callback) {
+          callback();
+        },
+      });
+    const host = new AgentHost();
+    vi.spyOn(host, "initialize").mockResolvedValue(undefined);
+    await runAgentMcpServer({ input: Readable.from([]), output: output(), host, app: createAgentAppRuntime({ model: "test-model" }) });
+    expect(host.initialize).toHaveBeenCalledOnce();
     const resolveDaemonService = vi.fn(async () => createService());
-    const output = new Writable({
-      write(_chunk, _encoding, callback) {
-        callback();
-      },
-    });
-
-    await runAgentMcpServer({
-      input: Readable.from([]),
-      output,
-      resolveDaemonService,
-    });
-
-    expect(resolveDaemonService).toHaveBeenCalledTimes(1);
+    await runAgentMcpServer({ input: Readable.from([]), output: output(), resolveDaemonService });
+    expect(resolveDaemonService).toHaveBeenCalledOnce();
   });
 });

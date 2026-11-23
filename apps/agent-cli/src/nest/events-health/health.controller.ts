@@ -1,10 +1,10 @@
 import { Controller, Get, Inject } from "@nestjs/common";
 import type { AgentService } from "../../service-api/index.js";
-import { AGENT_SERVICE } from "../tokens.js";
+import { AGENT_RUNTIME_INFO } from "../tokens.js";
 
 @Controller()
 export class HealthController {
-  constructor(@Inject(AGENT_SERVICE) private readonly service: AgentService) {}
+  constructor(@Inject(AGENT_RUNTIME_INFO) private readonly service: Pick<AgentService, "runtimeInfo" | "bridgeManifest">) {}
 
   @Get("health")
   async health(): Promise<Record<string, unknown>> {

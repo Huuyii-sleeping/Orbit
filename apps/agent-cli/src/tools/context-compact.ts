@@ -6,7 +6,7 @@ import type {
   ChatCompletionMessageParam,
   ChatCompletionTool,
 } from "openai/resources/chat/completions";
-import { RUNTIME_CONFIG, isLocalPersistenceEnabled } from "../runtime-config.js";
+import { RUNTIME_CONFIG, isLocalPersistenceEnabled } from "../config/runtime-config.js";
 import { sanitizeAndRedactValue } from "../security/data-hygiene.js";
 import { buildArtifactMetadata, isExpired } from "../security/local-retention.js";
 

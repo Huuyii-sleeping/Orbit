@@ -20,6 +20,7 @@
     "docker:skill-registry": "docker compose -f compose.skill-registry.yaml up --build",
     "dev:web": "pnpm --filter agent-web-console dev",
     "build:web": "pnpm --filter agent-web-console build",
-    "check:workflow-boundaries": "node scripts/check-workflow-boundaries.mjs"
+    "check:workflow-boundaries": "node scripts/check-workflow-boundaries.mjs",
+    "check:structure": "node scripts/check-repository-structure.mjs"
   }
 }

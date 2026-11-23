@@ -1,4 +1,4 @@
-import type { ChatCompletionMessageParam } from "openai/resources/chat/completions";
+import type { AgentInputMessage } from "@orbit/runtime-contracts";
 import { randomUUID } from "node:crypto";
 import type { RuntimeBinding } from "@orbit/runtime-contracts";
 
@@ -19,6 +19,8 @@ export type AgentRuntimeContext = {
 export type AgentSessionMemoryBinding = {
   ownerId: string;
   resourceId: string;
+  /** 默认等于 session id；压缩后指向新的 Mastra Memory 线程。 */
+  threadId?: string;
   title?: string;
   metadata: Record<string, unknown>;
 };
@@ -28,7 +30,7 @@ export type AgentSessionRecord = {
   createdAt: number;
   updatedAt: number;
   busy: boolean;
-  history: ChatCompletionMessageParam[];
+  history: AgentInputMessage[];
   rounds: number;
   agent: AgentRuntimeContext | null;
   memoryBinding?: AgentSessionMemoryBinding;
@@ -40,7 +42,9 @@ export function nowMs(): number {
 }
 
 function asObject(value: unknown): Record<string, unknown> {
-  return value && typeof value === "object" && !Array.isArray(value) ? (value as Record<string, unknown>) : {};
+  return value && typeof value === "object" && !Array.isArray(value)
+    ? (value as Record<string, unknown>)
+    : {};
 }
 
 function cleanText(value: unknown, fallback: string, limit: number): string {
@@ -55,8 +59,17 @@ function cleanSourceType(value: unknown): AgentSkillBinding["sourceType"] {
   return value === "remote" || value === "custom" || value === "builtin" ? value : "builtin";
 }
 
-function cleanRegistrySource(value: unknown, sourceType: AgentSkillBinding["sourceType"]): AgentSkillBinding["registrySource"] {
-  if (value === "official" || value === "verified" || value === "community" || value === "private" || value === "local") {
+function cleanRegistrySource(
+  value: unknown,
+  sourceType: AgentSkillBinding["sourceType"],
+): AgentSkillBinding["registrySource"] {
+  if (
+    value === "official" ||
+    value === "verified" ||
+    value === "community" ||
+    value === "private" ||
+    value === "local"
+  ) {
     return value;
   }
   return sourceType === "remote" ? "community" : "local";

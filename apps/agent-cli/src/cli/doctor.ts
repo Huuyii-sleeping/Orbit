@@ -13,12 +13,12 @@ import {
   type CliUsageSnapshot,
 } from "./ui.js";
 import { loadHooksConfig } from "../hooks/config.js";
-import { readModelUsageSnapshot } from "../model-policy.js";
-import { loadMcpServerConfigs } from "../tools/mcp-config.js";
-import { RUNTIME_CONFIG } from "../runtime-config.js";
-import { getBashSandboxMode } from "../runtime-config.js";
-import { listWorkspaceRoots } from "../workspace-roots.js";
-import { resolveOpenAiBaseUrl } from "../config.js";
+import { readModelUsageSnapshot } from "../models/model-policy.js";
+import { loadMcpServerConfigs } from "../tools/mcp/mcp-config.js";
+import { RUNTIME_CONFIG } from "../config/runtime-config.js";
+import { getBashSandboxMode } from "../config/runtime-config.js";
+import { listWorkspaceRoots } from "../security/workspace-roots.js";
+import { resolveOpenAiBaseUrl } from "../config/config.js";
 
 async function readPackageJson(): Promise<{ scripts?: Record<string, string> }> {
   try {

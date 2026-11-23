@@ -24,32 +24,34 @@ pnpm build:web
 
 - `src/main.tsx`：挂载 React。
 - `src/app/`：路由、初始化和页面装配。
-- `src/api/`：按领域组织接口、DTO 转换和 SSE；`src/api.ts` 是公共导出入口。
+- `src/api/`：按领域组织接口、DTO 转换和 SSE；`src/api/index.ts` 是公共导出入口。
 - `src/features/`：聊天、Agent、技能、SOP、设置的领域逻辑。
-- `src/components/`：布局和展示组件。
+- `src/pages/`：聊天、Agent、技能、SOP、设置与预览页面。
+- `src/components/`：跨页面复用的布局和展示组件。
+- `src/styles/`：全局主题与样式入口；领域样式就近放在 `features/`。
 
 开发与生产使用同一条真实接口链路，不默认注入模拟 Agent 或技能。后端不可用时显示连接与请求错误。
 
-## 正式工作台视觉
+## 前端改版预览
 
-正式入口为 `/studio`，已使用确定的「紧凑列表」方向。首页、导航、Agent、技能、SOP 和设置共用中性灰配色、连续列表与小尺寸控件，支持深浅主题和手机导航。页面使用真实 BFF API，不注入预览数据。
+启动 Web 后访问 [设计实验室](http://127.0.0.1:5173/design)。第二轮提供「紧凑列表」「内容目录」「双栏检查器」三个候选方向，每个方向支持浅色与深色主题，以及 Agent、对话、SOP 和技能场景。
 
-- `src/styles/compact-console.css`：主题令牌、应用边框和响应式导航。
-- `src/styles/compact-collections.css`：Agent 表格、技能和 SOP 连续列表。
-- `src/styles/compact-surfaces.css`：编辑表单、聊天、设置和画布面板。
-- `src/features/agents/components/AgentList.tsx`：真实草稿列表、技能筛选和空间摘要。
-- `src/features/agents/components/AgentEditor.tsx`：配置编辑与技能预检；保存仍由领域 hook 调用 API。
+预览通过独立入口延迟加载，示例数据与交互位于 `src/features/design-preview/`，页面装配位于 `src/pages/DesignPreviewPage.tsx`。预览不访问业务 API；配置、聊天、技能添加与流程运行均为本地演示。收藏方向保存在当前浏览器，方向与主题保存在 URL 中（`style=index|library|desk`、`theme=light|dark`），可复制链接对比；正式工作台入口仍为 `/studio`。
 
-在独立 worktree 与主分支并行开发时，可使用单独端口和 worktree 内的数据目录：
+第二轮参考：
 
-```bash
-AGENT_HTTP_PORT=3183 pnpm --filter agent-cli dev:server
-BFF_PORT=3184 AGENT_SERVICE_BASE_URL=http://127.0.0.1:3183 SKILL_REGISTRY_SERVICE_URL=http://127.0.0.1:3192 pnpm dev:bff
-SKILL_REGISTRY_PORT=3192 pnpm dev:skill-registry
-VITE_BFF_URL=http://127.0.0.1:3184 pnpm dev:web --host 127.0.0.1 --port 5174
-```
+- [Linear 官方 UI 改版复盘](https://linear.app/now/how-we-redesigned-the-linear-ui)：减少应用边框的视觉噪声，统一侧栏、标题和详情面板的对齐与信息层级。
+- [Notion 官方侧栏说明](https://www.notion.com/help/guides/navigating-with-the-sidebar)：将空间、导航、快捷访问和个人设置按用途分组。
 
-模型配置沿用根 README；BFF 和 Agent 的技能目录需按根 README 配置为同一位置。数据保留在各自 worktree 中，不复制或覆盖主分支运行数据。
+三个方向用相同示例比较对象列表、内容目录和主从检查器的操作差异。旧方向的 URL 会回到紧凑列表；旧收藏不会作为第二轮的选择。
+
+## Agent 配置与验证
+
+Agent 卡片进入配置页，支持职责提示词、模型 ID、工具白名单、固定版本技能与 JSON 输出格式。新 Agent 默认不授权工具、不预选技能；模型留空时使用系统策略，显式指定模型发生策略冲突时会报错。
+
+保存后可在「独立试跑」输入 JSON，检查结构化结果、耗时、工具日志和错误，并取消运行。试跑使用独立上下文，和 SOP 的 Agent 节点共用 Mastra 执行链路。最近十次测试可重新查看；记录沿用运行索引的保留期。
+
+「发布版本」固定已保存配置，之后的草稿修改不会影响该版本。进入 SOP Builder 后可在 Agent 节点选择发布版本。模型凭据继续由 Agent 服务配置，不保存在 Agent 草稿中。
 
 ## 正式工作流画布
 

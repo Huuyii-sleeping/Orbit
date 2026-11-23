@@ -1,5 +1,5 @@
 import { Clock3, GitCommitHorizontal, History, RefreshCw, Rocket, RotateCcw, X } from "lucide-react";
-import type { SopVersionSummary } from "../../../../api";
+import type { SopVersionSummary } from "../../../../api/index";
 
 function dateTime(value: number): string {
   return new Intl.DateTimeFormat("zh-CN", {

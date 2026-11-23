@@ -1,5 +1,5 @@
-import { agentSkillCatalog } from "../../../agent-builder";
-import type { AgentProfile, AgentProfileInput } from "../../../api";
+import { agentSkillCatalog } from "./agent-builder";
+import type { AgentProfile, AgentProfileInput } from "../../../api/index";
 
 export function agentDraftFromProfile(agent: AgentProfile): AgentProfileInput {
   return {
@@ -12,6 +12,7 @@ export function agentDraftFromProfile(agent: AgentProfile): AgentProfileInput {
     actions: agent.actions,
     systemPrompt: agent.systemPrompt,
     color: agent.color,
+    configuration: agent.configuration,
   };
 }
 

@@ -2,7 +2,7 @@ import { mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
-import { SopDatabase } from "../../../src/sops/sop-database.js";
+import { SopDatabase } from "../../../src/storage/sop-database.js";
 import { SopRevisionConflictError } from "../../../src/sops/sops.errors.js";
 import { SqliteSopsRepository } from "../../../src/sops/sqlite-sops.repository.js";
 import { createTestDraft } from "./test-fixtures.js";

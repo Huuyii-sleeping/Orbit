@@ -4,7 +4,7 @@ import path from "node:path";
 import * as process from "node:process";
 import { recordAuditEvent } from "../audit/runtime.js";
 import { recordObservabilityEvent, type ExecutionContext } from "../observability/runtime.js";
-import { nowTimestampMs } from "../time.js";
+import { nowTimestampMs } from "../lib/time.js";
 import { sanitizeAndRedactText, sanitizeAndRedactValue } from "./data-hygiene.js";
 
 export type SecretFindingAction = "block" | "warn" | "audit_only";

@@ -1,7 +1,7 @@
 import { execFile, type ExecFileException } from "node:child_process";
 import { promisify } from "node:util";
 import { recordObservabilityEvent } from "../observability/runtime.js";
-import { RUNTIME_CONFIG } from "../runtime-config.js";
+import { RUNTIME_CONFIG } from "../config/runtime-config.js";
 import type { DeliveryFailure, DeliveryStageName, DeliveryStagePlan, DeliveryStageResult } from "./types.js";
 import { truncateDeliveryOutput } from "./types.js";
 

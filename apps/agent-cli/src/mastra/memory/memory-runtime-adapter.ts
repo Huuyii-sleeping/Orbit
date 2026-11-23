@@ -2,6 +2,7 @@ import { randomUUID } from "node:crypto";
 import {
   RuntimePortError,
   type AppendMemoryMessagesCommand,
+  type CompactMemoryThreadCommand,
   type CreateMemoryThreadCommand,
   type DeleteMemoryThreadCommand,
   type GetMemoryThreadQuery,
@@ -16,7 +17,10 @@ import {
 import type { MastraDBMessage } from "@mastra/core/agent";
 import type { StorageThreadType } from "@mastra/core/memory";
 import type { Memory } from "@mastra/memory";
-import { MastraThreadMappingRepository, type MastraThreadMapping } from "../storage/thread-mapping-repository.js";
+import {
+  MastraThreadMappingRepository,
+  type MastraThreadMapping,
+} from "../storage/thread-mapping-repository.js";
 
 type AdapterOptions = {
   root?: string;
@@ -41,7 +45,11 @@ function pageLimit(value: number | undefined): number {
   return value === undefined ? 20 : Math.max(1, Math.trunc(value));
 }
 
-function page<T>(items: T[], cursor: string | undefined, limit: number | undefined): { items: T[]; nextCursor: string | null } {
+function page<T>(
+  items: T[],
+  cursor: string | undefined,
+  limit: number | undefined,
+): { items: T[]; nextCursor: string | null } {
   const start = cursorOffset(cursor);
   const size = pageLimit(limit);
   return {
@@ -121,7 +129,10 @@ function toMessage(message: MastraDBMessage, mapping: MastraThreadMapping): Memo
 export class MastraMemoryRuntimeAdapter implements MemoryRuntimePort {
   private readonly mappings: MastraThreadMappingRepository;
 
-  constructor(private readonly memory: Memory, options: AdapterOptions = {}) {
+  constructor(
+    private readonly memory: Memory,
+    options: AdapterOptions = {},
+  ) {
     this.mappings = options.mappings ?? new MastraThreadMappingRepository(options);
   }
 
@@ -138,12 +149,14 @@ export class MastraMemoryRuntimeAdapter implements MemoryRuntimePort {
       threadId: mapping.mastraThreadId,
       resourceId: mapping.mastraResourceId,
     });
-    const thread = existing ?? await this.memory.createThread({
-      threadId: mapping.mastraThreadId,
-      resourceId: mapping.mastraResourceId,
-      title: command.title,
-      metadata: command.metadata ?? {},
-    });
+    const thread =
+      existing ??
+      (await this.memory.createThread({
+        threadId: mapping.mastraThreadId,
+        resourceId: mapping.mastraResourceId,
+        title: command.title,
+        metadata: command.metadata ?? {},
+      }));
     return toThread(thread, mapping);
   }
 
@@ -159,13 +172,18 @@ export class MastraMemoryRuntimeAdapter implements MemoryRuntimePort {
 
   async listThreads(query: ListMemoryThreadsQuery): Promise<MemoryThreadPage> {
     const mappings = await this.mappings.list(query);
-    const threads = (await Promise.all(mappings.map(async (mapping) => {
-      const thread = await this.memory.getThreadById({
-        threadId: mapping.mastraThreadId,
-        resourceId: mapping.mastraResourceId,
-      });
-      return thread ? toThread(thread, mapping) : null;
-    }))).filter((thread): thread is MemoryThread => thread !== null)
+    const threads = (
+      await Promise.all(
+        mappings.map(async (mapping) => {
+          const thread = await this.memory.getThreadById({
+            threadId: mapping.mastraThreadId,
+            resourceId: mapping.mastraResourceId,
+          });
+          return thread ? toThread(thread, mapping) : null;
+        }),
+      )
+    )
+      .filter((thread): thread is MemoryThread => thread !== null)
       .sort((left, right) => left.createdAt - right.createdAt || left.id.localeCompare(right.id));
     return page(threads, query.cursor, query.limit);
   }
@@ -179,21 +197,73 @@ export class MastraMemoryRuntimeAdapter implements MemoryRuntimePort {
 
   async listMessages(query: ListMemoryMessagesQuery): Promise<MemoryMessagePage> {
     const mapping = await this.mappings.get(query);
-    if (!mapping) throw new RuntimePortError("RUNTIME_NOT_FOUND", `Memory thread ${query.threadId} 不存在。`);
+    if (!mapping)
+      throw new RuntimePortError("RUNTIME_NOT_FOUND", `Memory thread ${query.threadId} 不存在。`);
     const recalled = await this.memory.recall({
       threadId: mapping.mastraThreadId,
       resourceId: mapping.mastraResourceId,
       perPage: false,
       orderBy: { field: "createdAt", direction: "ASC" },
     });
-    return page(recalled.messages.map((message) => toMessage(message, mapping)), query.cursor, query.limit);
+    return page(
+      recalled.messages.map((message) => toMessage(message, mapping)),
+      query.cursor,
+      query.limit,
+    );
   }
 
   async appendMessages(command: AppendMemoryMessagesCommand): Promise<void> {
     const mapping = await this.mappings.get(command);
-    if (!mapping) throw new RuntimePortError("RUNTIME_NOT_FOUND", `Memory thread ${command.threadId} 不存在。`);
+    if (!mapping)
+      throw new RuntimePortError("RUNTIME_NOT_FOUND", `Memory thread ${command.threadId} 不存在。`);
     await this.memory.saveMessages({
       messages: command.messages.map((message) => toMastraMessage(command, mapping, message)),
     });
+  }
+
+  /** 通过 Mastra 公开存储接口复制完整工具消息，仅在新线程加入摘要。 */
+  async compactThread(command: CompactMemoryThreadCommand): Promise<MemoryThread> {
+    const source = await this.mappings.get(command);
+    if (!source)
+      throw new RuntimePortError("RUNTIME_NOT_FOUND", `Memory thread ${command.threadId} 不存在。`);
+    if (!command.summary.trim() || !command.retainedMessageIds.length)
+      throw new Error("压缩需要非空摘要和最近消息。");
+    const recalled = await this.memory.recall({
+      threadId: source.mastraThreadId,
+      resourceId: source.mastraResourceId,
+      perPage: false,
+      orderBy: { field: "createdAt", direction: "ASC" },
+    });
+    const ids = new Set(command.retainedMessageIds);
+    const retained = recalled.messages.filter((message) => ids.has(message.id));
+    if (retained.length !== ids.size) throw new Error("压缩引用的最近消息不属于原线程。");
+    const threadId = randomUUID();
+    const ownership = { ownerId: command.ownerId, resourceId: command.resourceId, threadId };
+    try {
+      // cloneThread 在当前 LibSQL :memory: 后端的事务连接上不能稳定工作。
+      // 使用同一 Memory 的公开接口复制原始消息结构，不改写工具调用与结果。
+      const thread = await this.createThread({
+        ...ownership,
+        id: threadId,
+        metadata: {
+          sourceThreadId: command.threadId,
+          contextSummary: command.summary,
+        },
+      });
+      await this.memory.saveMessages({
+        messages: retained.map((message) => ({
+          ...message,
+          id: randomUUID(),
+          threadId,
+          resourceId: source.mastraResourceId,
+        })),
+      });
+      return thread;
+    } catch (error) {
+      // 只清理本次新建线程，原线程和历史消息始终保留。
+      await this.memory.deleteThread(threadId);
+      await this.mappings.delete(ownership);
+      throw error;
+    }
   }
 }

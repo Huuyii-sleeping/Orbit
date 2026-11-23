@@ -3,7 +3,7 @@ import { readdir, rm, stat } from "node:fs/promises";
 import path from "node:path";
 import * as process from "node:process";
 import type { ChatCompletionTool } from "openai/resources/chat/completions";
-import { getBashSandboxMode, RUNTIME_CONFIG } from "../runtime-config.js";
+import { getBashSandboxMode, RUNTIME_CONFIG } from "../config/runtime-config.js";
 
 const DANGEROUS_SNIPPETS = ["rm -rf /", "sudo", "shutdown", "reboot"];
 const READONLY_WRITE_PREFIXES = [

@@ -16,7 +16,7 @@ import {
   startWorkflowRun,
   type SopVersionSummary,
   type WorkflowRunEventStream,
-} from "../../../api";
+} from "../../../api/index";
 import { appendWorkflowRuntimeEvent, applyWorkflowRuntimeEvent } from "./run-state";
 
 export type SopRunPhase = "idle" | "preparing" | "starting" | "running" | "terminal" | "error";

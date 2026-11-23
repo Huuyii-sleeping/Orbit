@@ -2,13 +2,13 @@ import { Controller, Get, Headers, Inject, Query, Req, Res } from "@nestjs/commo
 import type { IncomingMessage, ServerResponse } from "node:http";
 import type { AgentService } from "../../service-api/index.js";
 import { parseOptionalEventCursor, writeJson, writeSseEvent } from "../http.js";
-import { AGENT_SERVICE } from "../tokens.js";
+import { AGENT_HOST_EVENTS } from "../tokens.js";
 import { OrbitShutdownService } from "../orbit-shutdown.service.js";
 
 @Controller()
 export class EventsController {
   constructor(
-    @Inject(AGENT_SERVICE) private readonly service: AgentService,
+    @Inject(AGENT_HOST_EVENTS) private readonly service: Pick<AgentService, "bridgeManifest" | "bridgeState" | "replayEventsSince" | "subscribeEvents">,
     @Inject(OrbitShutdownService) private readonly shutdown: OrbitShutdownService,
   ) {}
 

@@ -1,22 +1,16 @@
 import { Body, Controller, Get, Inject, Param, Post, Req, Res } from "@nestjs/common";
 import type { IncomingMessage, ServerResponse } from "node:http";
 import type { AgentRuntimePort } from "@orbit/runtime-contracts";
+import type { ChatRequest } from "../../services/chat-service.js";
 import type { AgentService } from "../../service-api/index.js";
-import { AGENT_RUNTIME_PORT, AGENT_SERVICE } from "../tokens.js";
+import { AGENT_RUNTIME_PORT, AGENT_CHAT_SERVICE } from "../tokens.js";
 import { writeJson, writeSseEvent } from "../http.js";
 import { OrbitShutdownService } from "../orbit-shutdown.service.js";
-
-type ChatRequest = {
-  session_id?: string;
-  message?: string;
-  agent?: unknown;
-  include_scheduled_notifications?: boolean;
-};
 
 @Controller()
 export class AgentController {
   constructor(
-    @Inject(AGENT_SERVICE) private readonly service: AgentService,
+    @Inject(AGENT_CHAT_SERVICE) private readonly service: Pick<AgentService, "chat">,
     @Inject(AGENT_RUNTIME_PORT) private readonly runtime: AgentRuntimePort,
     @Inject(OrbitShutdownService) private readonly shutdown: OrbitShutdownService,
   ) {}

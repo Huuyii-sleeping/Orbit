@@ -2,8 +2,8 @@ import { readFile, writeFile } from "node:fs/promises";
 import path from "node:path";
 import * as process from "node:process";
 import { recordAuditEvent } from "../audit/runtime.js";
-import { isLocalPersistenceEnabled } from "../runtime-config.js";
-import { parseTimestampMs } from "../time.js";
+import { isLocalPersistenceEnabled } from "../config/runtime-config.js";
+import { parseTimestampMs } from "../lib/time.js";
 import {
   buildArtifactMetadata,
   isExpired,

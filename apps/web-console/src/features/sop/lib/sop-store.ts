@@ -6,6 +6,7 @@ import {
   normalizeWorkflowDraft,
   type BuiltinNodeType,
   type WorkflowDraft,
+  type WorkflowNode,
 } from "@orbit/workflow-core";
 
 const STORAGE_KEY_V1 = "agent-web-console-sop-drafts-v1";
@@ -98,7 +99,8 @@ export function appendSopNode(draft: WorkflowDraft, type: BuiltinNodeType, posit
       position,
       config,
       ports: definition.createPorts(config),
-    }],
+    // type、config 和 ports 均来自同一个注册表项，在动态类型边界恢复判别联合。
+    } as WorkflowNode],
   };
 }
 

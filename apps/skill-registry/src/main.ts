@@ -1,5 +1,5 @@
 import { resolveSkillRegistryConfig } from "./config.js";
-import { createSkillRegistryHttpServer } from "./server.js";
+import { createSkillRegistryHttpServer } from "./http/server.js";
 
 const config = resolveSkillRegistryConfig();
 const server = createSkillRegistryHttpServer(config);

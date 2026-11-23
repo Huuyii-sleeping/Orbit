@@ -1,6 +1,6 @@
 import { getErrorMessage } from "../../../lib/errors/error-factory";
 import { useCallback, useEffect, useState } from "react";
-import { fetchSopDrafts, fetchSopVersions } from "../../../api";
+import { fetchSopDrafts, fetchSopVersions } from "../../../api/index";
 import type { WorkflowReferenceCatalog, WorkflowVersionReferenceOption } from "../nodes/types";
 
 /** 按需加载 Subworkflow 可引用的不可变发布版本。 */

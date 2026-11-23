@@ -1,7 +1,7 @@
 import { mkdir, readdir, readFile, rm, writeFile } from "node:fs/promises";
 import path from "node:path";
 import { buildPromptEnvelope } from "./builder.js";
-import { getPrivacyConfig, isLocalPersistenceEnabled } from "../runtime-config.js";
+import { getPrivacyConfig, isLocalPersistenceEnabled } from "../config/runtime-config.js";
 import { sanitizeAndRedactText } from "../security/data-hygiene.js";
 import { buildArtifactMetadata, isExpired } from "../security/local-retention.js";
 import type { PromptBuilderInput, PromptSection } from "./types.js";

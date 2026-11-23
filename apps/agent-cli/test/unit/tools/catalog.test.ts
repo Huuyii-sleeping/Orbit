@@ -1,11 +1,11 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
-vi.mock("../../../src/tools/mcp.js", () => ({
+vi.mock("../../../src/tools/mcp/mcp.js", () => ({
   listMcpToolRegistrations: vi.fn(),
 }));
 
 import { ToolCatalog } from "../../../src/tools/catalog.js";
-import { listMcpToolRegistrations } from "../../../src/tools/mcp.js";
+import { listMcpToolRegistrations } from "../../../src/tools/mcp/mcp.js";
 
 describe("tools/catalog", () => {
   beforeEach(() => {

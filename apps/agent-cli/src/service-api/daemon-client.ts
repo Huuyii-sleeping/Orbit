@@ -1,6 +1,6 @@
 import { DaemonLock } from "../entrypoints/daemon-lock.js";
 import type { DaemonLockStatus } from "../entrypoints/daemon-lock.js";
-import { isRemoteAttachAllowed } from "../runtime-config.js";
+import { isRemoteAttachAllowed } from "../config/runtime-config.js";
 import { AgentServiceClient } from "./client.js";
 
 export type RunningDaemonServiceClient = {

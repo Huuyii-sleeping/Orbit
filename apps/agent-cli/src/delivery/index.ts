@@ -6,7 +6,7 @@ import {
   scanTextForSecrets,
   type SecretFinding,
 } from "../security/secret-scanning.js";
-import { nowTimestampMs } from "../time.js";
+import { nowTimestampMs } from "../lib/time.js";
 import { buildDeliveryPlan } from "./plan.js";
 import { loadLatestDeliveryReportFromStore, saveDeliveryReport } from "./report-store.js";
 import { runDeliveryStage } from "./runner.js";

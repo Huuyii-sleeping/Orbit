@@ -1,6 +1,6 @@
 import { Body, Controller, Get, Inject, Param, Post, Put, Res } from "@nestjs/common";
 import type { ServerResponse } from "node:http";
-import { errorPayload, writeJson } from "../http-utils.js";
+import { errorPayload, writeJson } from "../http/http-utils.js";
 import { SkillLifecycleConflictError, SkillRegistryService } from "./skill-registry.service.js";
 import type { SkillPackageInput } from "./skill-types.js";
 

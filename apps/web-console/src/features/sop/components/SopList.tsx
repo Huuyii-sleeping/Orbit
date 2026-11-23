@@ -9,8 +9,8 @@ function timeLabel(value: number): string {
   return new Intl.DateTimeFormat("zh-CN", { month: "numeric", day: "numeric", hour: "2-digit", minute: "2-digit" }).format(new Date(value));
 }
 
-function nodeTypeCount(draft: SopDraft, type: SopNodeType): number {
-  return draft.nodes.filter((node) => node.type === type).length;
+function nodeTypeCount(draft: SopDraft, ...types: SopNodeType[]): number {
+  return draft.nodes.filter((node) => types.some((type) => node.type === type)).length;
 }
 
 export function SopList({
@@ -33,7 +33,7 @@ export function SopList({
     return drafts.filter((draft) => {
       const haystack = `${draft.name} ${draft.summary}`.toLowerCase();
       if (keyword && !haystack.includes(keyword)) return false;
-      if (filter === "ai" && nodeTypeCount(draft, "llm") === 0) return false;
+      if (filter === "ai" && nodeTypeCount(draft, "llm", "agent") === 0) return false;
       if (filter === "condition" && nodeTypeCount(draft, "condition") === 0) return false;
       if (filter === "empty" && draft.nodes.length === 0) return false;
       return true;
@@ -42,7 +42,7 @@ export function SopList({
 
   const filterItems = [
     { key: "all", label: "全部", count: drafts.length },
-    { key: "ai", label: "含 AI 节点", count: drafts.filter((d) => nodeTypeCount(d, "llm") > 0).length },
+    { key: "ai", label: "含 AI 节点", count: drafts.filter((d) => nodeTypeCount(d, "llm", "agent") > 0).length },
     { key: "condition", label: "含条件分支", count: drafts.filter((d) => nodeTypeCount(d, "condition") > 0).length },
     { key: "empty", label: "空白草稿", count: drafts.filter((d) => d.nodes.length === 0).length },
   ];
@@ -113,7 +113,7 @@ export function SopList({
                     <span className="chip">
                       {SOP_TYPE_META.start.label} → {SOP_TYPE_META.end.label}
                     </span>
-                    {nodeTypeCount(draft, "llm") > 0 ? <span className="chip">{nodeTypeCount(draft, "llm")} AI</span> : null}
+                    {nodeTypeCount(draft, "llm", "agent") > 0 ? <span className="chip">{nodeTypeCount(draft, "llm", "agent")} AI</span> : null}
                     {nodeTypeCount(draft, "condition") > 0 ? <span className="chip">{nodeTypeCount(draft, "condition")} 分支</span> : null}
                   </div>
 

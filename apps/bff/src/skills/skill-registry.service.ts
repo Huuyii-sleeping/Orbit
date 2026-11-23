@@ -1,5 +1,5 @@
 import { Injectable } from "@nestjs/common";
-import { LocalStoreService } from "../local-store.service.js";
+import { LocalStoreService } from "../storage/local-store.service.js";
 import type {
   RemoteRegistrySettings,
   RemoteRegistryState,

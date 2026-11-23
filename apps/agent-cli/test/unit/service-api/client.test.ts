@@ -10,6 +10,31 @@ function jsonResponse(body: unknown, status = 200): Response {
 }
 
 describe("service-api/client", () => {
+  it("将压缩交给 daemon，校验响应并保留本地会话缓存", async () => {
+    const result = {
+      sourceThreadId: "s/01",
+      threadId: "compacted",
+      keptRecent: 2,
+      oldMessageCount: 8,
+      newMessageCount: 3,
+      estimatedBefore: 900,
+      estimatedAfter: 100,
+      reducedBy: 800,
+    };
+    const fetchImpl = vi.fn<typeof fetch>(async () => jsonResponse({ ok: true, result }));
+    const client = new AgentServiceClient({ baseUrl: "http://localhost:12345", fetchImpl });
+    await expect(client.compactSession("s/01", 2)).resolves.toEqual(result);
+    const [url, options] = fetchImpl.mock.calls[0]!;
+    expect(String(url)).toContain("/sessions/s%2F01/compact");
+    expect(JSON.parse(String(options?.body))).toEqual({ keepRecent: 2 });
+    fetchImpl.mockResolvedValueOnce(jsonResponse({ ok: true, result: {} }));
+    await expect(client.compactSession("s01", 2)).rejects.toThrow("invalid compaction result");
+    fetchImpl.mockResolvedValueOnce(
+      jsonResponse({ ok: false, error: { message: "session is busy" } }, 409),
+    );
+    await expect(client.compactSession("s01", 2)).rejects.toThrow("session is busy");
+  });
+
   it("hydrates shared sessions and refreshes them after remote calls", async () => {
     const sessions = new Map<string, { busy: boolean; messages: ChatCompletionMessageParam[] }>([
       ["s01", { busy: false, messages: [{ role: "user", content: "hello daemon" }] }],
@@ -62,10 +87,13 @@ describe("service-api/client", () => {
         const sessionId = decodeURIComponent(url.pathname.slice("/sessions/".length));
         const session = sessions.get(sessionId);
         if (!session) {
-          return jsonResponse({
-            ok: false,
-            error: { code: "SESSION_NOT_FOUND", message: sessionId },
-          }, 404);
+          return jsonResponse(
+            {
+              ok: false,
+              error: { code: "SESSION_NOT_FOUND", message: sessionId },
+            },
+            404,
+          );
         }
         return jsonResponse({
           ok: true,
@@ -81,14 +109,17 @@ describe("service-api/client", () => {
         const sessionId = `s${String(nextSessionId).padStart(2, "0")}`;
         nextSessionId += 1;
         sessions.set(sessionId, { busy: false, messages: [] });
-        return jsonResponse({
-          ok: true,
-          session: {
-            id: sessionId,
-            busy: false,
-            messageCount: 0,
+        return jsonResponse(
+          {
+            ok: true,
+            session: {
+              id: sessionId,
+              busy: false,
+              messageCount: 0,
+            },
           },
-        }, 201);
+          201,
+        );
       }
       if (method === "GET" && url.pathname === "/tools") {
         return jsonResponse({
@@ -97,17 +128,26 @@ describe("service-api/client", () => {
         });
       }
       if (method === "POST" && url.pathname === "/chat") {
-        const body = JSON.parse(String(init?.body ?? "{}")) as { session_id?: string; message?: string };
+        const body = JSON.parse(String(init?.body ?? "{}")) as {
+          session_id?: string;
+          message?: string;
+        };
         const sessionId = String(body.session_id ?? "s01");
         const session = sessions.get(sessionId);
         if (!session) {
-          return jsonResponse({
-            ok: false,
-            error: { code: "SESSION_NOT_FOUND", message: sessionId },
-          }, 400);
+          return jsonResponse(
+            {
+              ok: false,
+              error: { code: "SESSION_NOT_FOUND", message: sessionId },
+            },
+            400,
+          );
         }
         session.messages.push({ role: "user", content: String(body.message ?? "") });
-        session.messages.push({ role: "assistant", content: `reply:${String(body.message ?? "")}` });
+        session.messages.push({
+          role: "assistant",
+          content: `reply:${String(body.message ?? "")}`,
+        });
         return jsonResponse({
           ok: true,
           assistant: `reply:${String(body.message ?? "")}`,
@@ -119,7 +159,10 @@ describe("service-api/client", () => {
         });
       }
       if (method === "POST" && url.pathname === "/tools/call") {
-        const body = JSON.parse(String(init?.body ?? "{}")) as { name?: string; arguments_json?: string };
+        const body = JSON.parse(String(init?.body ?? "{}")) as {
+          name?: string;
+          arguments_json?: string;
+        };
         return jsonResponse({
           ok: true,
           output: `tool:${String(body.name ?? "")}:${String(body.arguments_json ?? "")}`,
@@ -158,7 +201,9 @@ describe("service-api/client", () => {
         history: [{ role: "user", content: "hello daemon" }],
       },
     ]);
-    expect(await client.toolsMetadata()).toEqual([{ name: "bash", target: "base", description: "Shell" }]);
+    expect(await client.toolsMetadata()).toEqual([
+      { name: "bash", target: "base", description: "Shell" },
+    ]);
 
     const created = await client.createSession();
     expect(created).toEqual({ id: "s02" });
@@ -179,8 +224,8 @@ describe("service-api/client", () => {
       role: "assistant",
       content: "reply:follow up",
     });
-    expect(await client.runToolByName("bash", "{\"command\":\"pwd\"}")).toBe(
-      "tool:bash:{\"command\":\"pwd\"}",
+    expect(await client.runToolByName("bash", '{"command":"pwd"}')).toBe(
+      'tool:bash:{"command":"pwd"}',
     );
   });
 

@@ -1,6 +1,7 @@
+import { AgentConfigurationError } from "@orbit/workflow-core";
 import { Body, Controller, Delete, Get, Inject, Param, Post, Put, Res } from "@nestjs/common";
 import type { ServerResponse } from "node:http";
-import { errorPayload, writeJson } from "../http-utils.js";
+import { errorPayload, writeJson } from "../http/http-utils.js";
 import { AgentProfileService, AgentSkillBindingValidationError } from "./agent-profile.service.js";
 import { AgentVersionNotFoundError, AgentVersionService } from "./agent-version.service.js";
 
@@ -43,7 +44,7 @@ export class AgentsController {
         writeJson(res, 404, errorPayload(error.code, error.message));
         return;
       }
-      throw error;
+      this.writeAgentError(res, error);
     }
   }
 
@@ -78,6 +79,10 @@ export class AgentsController {
   }
 
   private writeAgentError(res: ServerResponse, error: unknown): void {
+    if (error instanceof AgentConfigurationError) {
+      writeJson(res, 400, errorPayload(error.code, error.message));
+      return;
+    }
     if (error instanceof AgentSkillBindingValidationError) {
       const payload = errorPayload(error.code, error.message);
       writeJson(res, 400, {

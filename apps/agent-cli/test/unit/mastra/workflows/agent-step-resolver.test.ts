@@ -1,3 +1,4 @@
+import { ModelCatalog } from "../../../../src/mastra/models/model-catalog.js";
 import { describe, expect, it, vi } from "vitest";
 import { MastraAgentDefinitionRegistry } from "../../../../src/mastra/agents/definition-registry.js";
 import { OrbitMastraWorkflowAgentResolver } from "../../../../src/mastra/workflows/agent-step-resolver.js";
@@ -30,8 +31,7 @@ describe("mastra/workflows/agent-step-resolver", () => {
         selectModel: vi.fn().mockResolvedValue({ model: "gpt-selected", budgetAction: "allow" }),
         finalizeUsage,
       },
-      baseUrl: "https://models.example/v1",
-      apiKey: "test-key",
+      modelCatalog: new ModelCatalog({ env: { OPENAI_BASE_URL: "https://models.example/v1", OPENAI_API_KEY: "test-key" } }),
     });
     const deltas: string[] = [];
     const result = await resolver.stream({

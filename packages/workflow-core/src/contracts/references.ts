@@ -23,6 +23,8 @@ export type AgentVersion = {
   name: string;
   description: string;
   instructions: string[];
+  /** 空值或旧版本未设置时使用系统模型策略。 */
+  modelId?: string;
   toolPolicy: { allowedToolIds: string[] };
   skillPolicy: { bindings: AgentVersionSkillBinding[] };
   outputSchema: AgentOutputSchema;

@@ -1,3 +1,4 @@
+import type { Readable, Writable } from "node:stream";
 import { readFileSync } from "node:fs";
 import * as process from "node:process";
 
@@ -36,8 +37,8 @@ export type CliInvocation =
   | { mode: "dump-system-prompt" };
 
 export type CliIo = {
-  stdin: NodeJS.ReadableStream & { isTTY?: boolean };
-  stdout: NodeJS.WritableStream;
+  stdin: Readable & { isTTY?: boolean };
+  stdout: Writable;
   stderr: NodeJS.WritableStream;
 };
 
@@ -165,7 +166,7 @@ export async function dispatchCli(
     return 0;
   }
   if (invocation.mode === "server") {
-    const { runServer } = await import("../service-api/server.js");
+    const { runServer } = await import("./server.js");
     await runServer();
     return 0;
   }
