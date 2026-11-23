@@ -1,4 +1,4 @@
-import { writeStreamChunk } from "./stream-utils.js";
+import { writeStreamChunk } from "../stream-utils.js";
 import { Injectable } from "@nestjs/common";
 import { resolveAgentServiceToken, resolveServiceEndpoint, type AgentServiceAuthOptions } from "@orbit/service-auth";
 import type { IncomingMessage, ServerResponse } from "node:http";

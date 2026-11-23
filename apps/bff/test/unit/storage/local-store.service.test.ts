@@ -2,7 +2,7 @@ import { mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
-import { LocalStoreService } from "../../../src/local-store.service.js";
+import { LocalStoreService } from "../../../src/storage/local-store.service.js";
 
 const roots: string[] = [];
 const stores: LocalStoreService[] = [];

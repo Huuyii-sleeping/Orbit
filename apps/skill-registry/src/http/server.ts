@@ -1,4 +1,4 @@
-import { readJsonBody, RegistryHttpError, writeJson, writeRequestError } from "./http/http-utils.js";
+import { readJsonBody, RegistryHttpError, writeJson, writeRequestError } from "./http-utils.js";
 import { createServer, type IncomingMessage, type Server, type ServerResponse } from "node:http";
 import { timingSafeEqual } from "node:crypto";
 import { DEFAULT_SKILL_REGISTRY_ADMIN_TOKEN } from "../config.js";

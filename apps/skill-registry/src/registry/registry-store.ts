@@ -1,5 +1,5 @@
 import { rcompare } from "semver";
-import { storePackage } from "./registry/package-writer.js";
+import { storePackage } from "./package-writer.js";
 import { existsSync, mkdirSync, readFileSync } from "node:fs";
 import { createRequire } from "node:module";
 import { dirname, join, normalize } from "node:path";

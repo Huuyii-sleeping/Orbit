@@ -1,6 +1,10 @@
 import type { ServerResponse } from "node:http";
 
 export type JsonObject = Record<string, unknown>;
+const saasResponses = new WeakSet<object>();
+
+/** 标记 SaaS 响应，避免共享写入函数重新添加通配符 CORS。 */
+export function markSaasResponse(res: object): void { saasResponses.add(res); }
 
 /** Apply common Web-facing response headers for BFF endpoints. */
 export function applyCommonHeaders(res: ServerResponse): void {
@@ -8,9 +12,11 @@ export function applyCommonHeaders(res: ServerResponse): void {
 }
 
 export function applyHeaderSetters(res: { setHeader(name: string, value: string): void }): void {
-  res.setHeader("Access-Control-Allow-Origin", "*");
-  res.setHeader("Access-Control-Allow-Methods", "GET,POST,PUT,PATCH,DELETE,OPTIONS");
-  res.setHeader("Access-Control-Allow-Headers", "Content-Type,Last-Event-ID");
+  if (!saasResponses.has(res)) {
+    res.setHeader("Access-Control-Allow-Origin", "*");
+    res.setHeader("Access-Control-Allow-Methods", "GET,POST,PUT,PATCH,DELETE,OPTIONS");
+    res.setHeader("Access-Control-Allow-Headers", "Content-Type,Last-Event-ID");
+  }
   res.setHeader("Cache-Control", "no-store");
 }
 

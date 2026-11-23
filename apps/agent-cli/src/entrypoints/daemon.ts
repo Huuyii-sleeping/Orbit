@@ -1,9 +1,11 @@
 import * as process from "node:process";
+import { assertAgentServiceListenAddress, resolveAgentServiceToken } from "@orbit/service-auth";
 import { createAgentAppRuntime, type AgentAppRuntimeDeps } from "../bootstrap/app-runtime.js";
 import { AgentHost } from "../host/agent-host.js";
 import { runServer, type AgentServerLike } from "./server.js";
 import { createMastraAgentService } from "../bootstrap/mastra-service.js";
 import { DaemonLock } from "./daemon-lock.js";
+import { resolveAgentHttpHost } from "../service-api/config.js";
 
 type DaemonHost = {
   initialize(): Promise<void>;
@@ -129,6 +131,9 @@ export async function waitForDaemonShutdown(input: {
 export async function runDaemon(
   io: DaemonIo = {},
 ): Promise<void> {
+  const agentServiceToken = resolveAgentServiceToken();
+  const bindAddress = resolveAgentHttpHost();
+  assertAgentServiceListenAddress(bindAddress, agentServiceToken);
   const output = io.output ?? process.stdout;
   const errorOutput = io.errorOutput ?? process.stderr;
   const lock = new DaemonLock(io.runtimeRoot);
@@ -152,7 +157,7 @@ export async function runDaemon(
           io.app ?? createAgentAppRuntime(),
           activeHost,
         );
-        return runServer({ service, output: activeOutput });
+        return runServer({ service, output: activeOutput, agentServiceToken, bindAddress, enableShutdownHooks: false });
       });
     const server = await startHttpServer({ host, output, errorOutput });
     const waitForShutdown = io.waitForShutdown ?? waitForDaemonShutdown;

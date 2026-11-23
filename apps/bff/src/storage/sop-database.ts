@@ -1,4 +1,4 @@
-import { replaceSopBackup } from "./sop-backup.js";
+import { replaceSopBackup } from "../sops/sop-backup.js";
 import { Injectable, type OnModuleDestroy } from "@nestjs/common";
 import Database from "better-sqlite3";
 import { mkdirSync } from "node:fs";

@@ -12,6 +12,7 @@
 | `apps/skill-registry` | 独立技能仓库，管理技能包、版本和下载 |
 | `packages/workflow-core` | 工作流模型、节点注册、校验和编译 |
 | `packages/runtime-contracts` | Agent、Workflow、Tool、Memory 运行接口 |
+| `packages/service-auth` | BFF 与 Agent 服务之间的受信令牌和同源地址校验 |
 | `skills` / `registries` | 产品内置技能与仓库种子数据 |
 | `examples/python` / `examples/typescript` | 独立教学示例，不参与生产构建 |
 | `docs/architecture.md` | 当前目录职责与依赖边界 |
@@ -23,6 +24,8 @@ Web → BFF → Agent Service → Runtime Ports → Mastra → 模型 / 工具 /
 ```
 
 Web 只访问 BFF 的 `/api/*`。产品层使用共享契约，Mastra 的内部类型和执行状态留在运行时适配层。生产运行时锁定为 `@mastra/core@1.52.1`。
+
+对外 SaaS 的认证、租户隔离现状和部署要求见 [SaaS 身份说明](docs/saas-identity.md)。当前 SaaS 模式仅开放已隔离的身份和个人配置接口，其余业务接口会拒绝访问。
 
 服务端按进程内模块组织，现有部署和端口保持不变：
 
@@ -87,6 +90,8 @@ pnpm dev:web
 | 环境变量 | 默认值 / 用途 |
 | --- | --- |
 | `AGENT_HTTP_PORT` | `3181` |
+| `AGENT_HTTP_HOST` | 默认 `127.0.0.1`；对外监听必须配置服务令牌 |
+| `AGENT_SERVICE_TOKEN` | BFF 与 Agent 服务共用的内部 Bearer 令牌；生产必填，不传给浏览器 |
 | `BFF_PORT` | `3182` |
 | `AGENT_SERVICE_BASE_URL` | `http://127.0.0.1:3181` |
 | `SKILL_REGISTRY_PORT` | `3190` |
@@ -95,6 +100,7 @@ pnpm dev:web
 | `VITE_BFF_URL` | Vite `/api` 代理目标，默认 `http://127.0.0.1:3182` |
 | `SKILLHUB_DATA_ROOT` | BFF 技能目录，默认 `<cwd>/.data/skills` |
 | `SOP_DATA_ROOT` | 产品 SQLite 目录，默认 `<cwd>/.data/sops` |
+| `BFF_MODE` | 开发默认 `local`，生产强制 `saas`；OIDC 参数见 SaaS 身份说明 |
 | `SKILL_REGISTRY_DATA_ROOT` | Registry 数据目录，默认 `<cwd>/runtime/skill-registry` |
 
 Mastra 的 Memory 和 snapshot 使用 LibSQL，数据位于 `<cwd>/.runtime/mastra/v1/`。BFF 产品配置与 Runtime 执行状态分开存储；Skill Hub 安装目录必须与 Agent 读取目录一致。路径以服务进程工作目录为基准，切换启动方式时应显式配置共享目录。

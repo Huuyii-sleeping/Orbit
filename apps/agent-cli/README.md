@@ -20,6 +20,8 @@
 
 生产执行统一经过 `RuntimeGateway` 的四类 Port；不新增其他 Runtime，也不在适配器中维护第二套调度器或 snapshot 引擎。
 
+HTTP 服务在无 `AGENT_SERVICE_TOKEN` 时仅监听 loopback；生产必须配置长度 32 至 512 的内部令牌，BFF 使用同一令牌调用 JSON 和 SSE。`AGENT_HTTP_HOST` 可显式设置监听 IP，跨服务部署需要受信网络。浏览器用户认证由 BFF 处理，不能把此令牌放入前端配置。
+
 `AgentHost` 仅管理会话存储与事件，不保存模型客户端或应用服务容器。Nest 各领域模块显式导入运行依赖，不依赖全局注入；模型 SDK 客户端不属于启动配置。
 
 ## 常用命令

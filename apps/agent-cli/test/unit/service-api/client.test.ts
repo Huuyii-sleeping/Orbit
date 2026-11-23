@@ -10,6 +10,20 @@ function jsonResponse(body: unknown, status = 200): Response {
 }
 
 describe("service-api/client", () => {
+  it("uses a server credential only on same-origin requests and rejects redirects", async () => {
+    const token = "agent-service-client-test-token-0123456789";
+    const fetchImpl = vi.fn<typeof fetch>(async () => jsonResponse({ ok: true, result: {
+      sourceThreadId: "s1", threadId: "s2", keptRecent: 1, oldMessageCount: 2,
+      newMessageCount: 1, estimatedBefore: 3, estimatedAfter: 2, reducedBy: 1,
+    } }));
+    const client = new AgentServiceClient({ baseUrl: "http://127.0.0.1:3181", agentServiceToken: token, fetchImpl });
+    await client.compactSession("s1", 1);
+    const [, request] = fetchImpl.mock.calls[0]!;
+    expect(new Headers(request?.headers).get("Authorization")).toBe(`Bearer ${token}`);
+    expect(request?.redirect).toBe("error");
+    expect(() => new AgentServiceClient({ baseUrl: "https://user:pass@example.com", agentServiceToken: token })).toThrow();
+  });
+
   it("将压缩交给 daemon，校验响应并保留本地会话缓存", async () => {
     const result = {
       sourceThreadId: "s/01",

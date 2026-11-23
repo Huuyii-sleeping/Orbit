@@ -13,6 +13,7 @@ import { SopsModule, type SopsModuleOptions } from "./sops/sops.module.js";
 import { WorkflowRunsModule } from "./workflow-runs/workflow-runs.module.js";
 import { WorkspaceModule } from "./workspace/workspace.module.js";
 import { ModelsModule } from "./models/models.module.js";
+import { IdentityModule } from "./identity/identity.module.js";
 
 /** BFF 进程启动配置，各领域仅接收自己需要的配置和共享资源。 */
 export type AppModuleOptions = AgentProxyOptions & LocalStoreOptions & SkillRegistryOptions & SopsModuleOptions;
@@ -31,6 +32,7 @@ export class AppModule {
     return {
       module: AppModule,
       imports: [
+        ...(options.requireTenantContext ? [IdentityModule] : []),
         runtime,
         ModelsModule.register(runtime),
         WorkspaceModule.register(store),

@@ -12,7 +12,7 @@ const roots: string[] = [];
 async function start() {
   const root = await mkdtemp(join(tmpdir(), "orbit-registry-http-"));
   roots.push(root);
-  const moduleUrl = new URL("../../src/server.ts", import.meta.url).href;
+  const moduleUrl = new URL("../../src/http/server.ts", import.meta.url).href;
   const script = `import { createSkillRegistryHttpServer } from ${JSON.stringify(moduleUrl)};
     const server = createSkillRegistryHttpServer(${JSON.stringify({ dbPath: join(root, "db.sqlite"), packageRoot: join(root, "packages"), adminToken: "test-token", maxRequestBodyBytes: 1024 })});
     server.listen(0, '127.0.0.1', () => console.log(server.address().port));`;

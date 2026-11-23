@@ -2,7 +2,7 @@ import { Injectable, type OnModuleDestroy } from "@nestjs/common";
 import Database from "better-sqlite3";
 import { mkdirSync, readFileSync } from "node:fs";
 import { dirname, join } from "node:path";
-import { requireTenantContext } from "./identity/tenant-context.js";
+import { requireTenantContext } from "../identity/tenant-context.js";
 
 export type LocalStoreOptions = {
   /** 旧 JSON 文件路径；事务数据库保存到同路径的 .sqlite 文件。 */

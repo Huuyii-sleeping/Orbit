@@ -1,7 +1,7 @@
 import { createServer, type Server } from "node:http";
 import { once } from "node:events";
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { AgentProxyService } from "../../../src/agent-proxy.service.js";
+import { AgentProxyService } from "../../../src/runtime-connection/agent-proxy.service.js";
 
 const servers: Server[] = [];
 afterEach(async () => {

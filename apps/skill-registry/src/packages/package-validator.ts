@@ -1,4 +1,5 @@
 import type { SkillManifest, SkillMaturity, SkillPackageInput, SkillPackageVersion, SkillValidationResult } from "../types.js";
+import { valid } from "semver";
 
 const maxPackageFiles = 32;
 const maxFileBytes = 128 * 1024;

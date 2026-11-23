@@ -24,5 +24,6 @@ jobs:
       - run: pnpm --filter skill-registry test
       - run: pnpm --filter agent-cli test:workflow
       - run: pnpm --filter agent-cli test:daemon
-      - run: pnpm --filter agent-cli exec vitest run test/unit/agent-service.test.ts test/unit/service-api test/unit/entrypoints/daemon.test.ts test/unit/runtime test/unit/mastra/storage test/unit/mastra/adapters/agent-runtime-adapter.test.ts test/smoke/nest-host-compatibility.test.ts --no-cache
+      - run: pnpm --filter agent-cli exec vitest run test/unit/entrypoints/server.test.ts test/unit/entrypoints/daemon.test.ts test/unit/service-api test/unit/mastra/storage test/unit/mastra/adapters/agent-runtime-adapter.test.ts test/smoke/nest-host-compatibility.test.ts --no-cache
       - run: pnpm check:workflow-boundaries
+      - run: pnpm check:structure

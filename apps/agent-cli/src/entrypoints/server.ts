@@ -1,10 +1,11 @@
 import * as process from "node:process";
+import { assertAgentServiceListenAddress, resolveAgentServiceToken, type AgentServiceAuthOptions } from "@orbit/service-auth";
 import { pathToFileURL } from "node:url";
 import type { AddressInfo } from "node:net";
 import { AgentService } from "../service-api/index.js";
 import { createAgentAppRuntime, type AgentAppRuntimeDeps } from "../bootstrap/app-runtime.js";
 import { AgentHost } from "../host/agent-host.js";
-import { resolveAgentHttpPort } from "../service-api/config.js";
+import { resolveAgentHttpHost, resolveAgentHttpPort } from "../service-api/config.js";
 import { createNestAgentHttpServer } from "../nest/server.js";
 import { createMastraAgentService } from "../bootstrap/mastra-service.js";
 import { getDefaultModel } from "../config/config.js";
@@ -20,7 +21,11 @@ export type AgentServerLike = {
   address?(): AddressInfo | string | null;
 };
 
-export type RunServerOptions = {
+export type RunServerOptions = AgentServiceAuthOptions & {
+  /** 监听 IP；缺省只监听本机。 */
+  bindAddress?: string;
+  /** daemon 自己处理进程信号时关闭 Nest 的重复处理。 */
+  enableShutdownHooks?: boolean;
   service?: AgentService;
   host?: AgentHost;
   app?: AgentAppRuntimeDeps;
@@ -30,6 +35,9 @@ export type RunServerOptions = {
 };
 
 export async function runServer(options: RunServerOptions = {}): Promise<AgentServerLike> {
+  const agentServiceToken = resolveAgentServiceToken(options);
+  const bindAddress = options.bindAddress ?? resolveAgentHttpHost();
+  assertAgentServiceListenAddress(bindAddress, agentServiceToken);
   let service = options.service;
   if (!service) {
     const host = options.host ?? new AgentHost();
@@ -39,14 +47,15 @@ export async function runServer(options: RunServerOptions = {}): Promise<AgentSe
   }
   const server = options.serverFactory
     ? await options.serverFactory(service)
-    : await createNestAgentHttpServer(service, { enableShutdownHooks: true });
+    : await createNestAgentHttpServer(service, { enableShutdownHooks: options.enableShutdownHooks ?? true, agentServiceToken });
   const targetPort = options.port ?? resolveAgentHttpPort();
   const output = options.output ?? process.stdout;
   await new Promise<void>((resolve, reject) => {
     server.once("error", reject);
-    server.listen(targetPort, "0.0.0.0", () => resolve());
+    server.listen(targetPort, bindAddress, () => resolve());
   });
-  output.write(`agent service listening on http://0.0.0.0:${targetPort}\n`);
+  const urlHost = bindAddress.includes(":") ? `[${bindAddress}]` : bindAddress;
+  output.write(`agent service listening on http://${urlHost}:${targetPort}\n`);
   return server;
 }
 

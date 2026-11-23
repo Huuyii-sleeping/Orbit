@@ -1,7 +1,8 @@
 import "reflect-metadata";
+import Database from "better-sqlite3";
 import { NestFactory } from "@nestjs/core";
 import type { INestApplication } from "@nestjs/common";
-import { mkdtemp, readFile, rm } from "node:fs/promises";
+import { mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, describe, expect, it, vi } from "vitest";
@@ -63,7 +64,13 @@ describe("BFF 模块独立运行", () => {
     });
     expect(update.status).toBe(200);
     expect(await update.json()).toMatchObject({ ok: true, settings: { theme: "light" } });
-    expect(JSON.parse(await readFile(filePath, "utf8"))).toMatchObject({ settings: { theme: "light" } });
+    const database = new Database(`${filePath}.sqlite`, { readonly: true });
+    try {
+      const row = database.prepare("SELECT value_json FROM business_sections WHERE key = ?").get("settings") as { value_json: string };
+      expect(JSON.parse(row.value_json)).toMatchObject({ theme: "light" });
+    } finally {
+      database.close();
+    }
     const settings = await fetch(`${base}/api/settings`);
     expect(await settings.json()).toMatchObject({ settings: { theme: "light" } });
     expect((await fetch(`${base}/api/agents`)).status).toBe(404);

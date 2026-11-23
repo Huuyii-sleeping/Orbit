@@ -2,7 +2,7 @@ import { randomUUID } from "node:crypto";
 import { existsSync, mkdirSync, readFileSync, renameSync, rmSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import type { DatabaseSync } from "node:sqlite";
-import { packageDirectory, sha256Hex } from "../package-utils.js";
+import { packageDirectory, sha256Hex } from "../packages/package-utils.js";
 import type { SkillManifest, SkillPublisher, SkillRegistrySource } from "../types.js";
 
 /** 已发布版本不可覆盖；相同内容与发布者的重试可安全重复。 */

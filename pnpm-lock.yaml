@@ -131,6 +131,9 @@ importers:
       express-openid-connect:
         specifier: 3.4.0
         version: 3.4.0(express@5.2.1)
+      jose:
+        specifier: 6.1.3
+        version: 6.1.3
       reflect-metadata:
         specifier: ^0.2.2
         version: 0.2.2
@@ -153,9 +156,6 @@ importers:
       '@types/semver':
         specifier: 7.7.1
         version: 7.7.1
-      jose:
-        specifier: 6.1.3
-        version: 6.1.3
       tsx:
         specifier: ^4.20.0
         version: 4.21.0

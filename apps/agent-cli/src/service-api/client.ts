@@ -1,4 +1,5 @@
 import type { AgentInputMessage, SessionCompactionResult } from "@orbit/runtime-contracts";
+import { resolveAgentServiceToken, resolveServiceEndpoint, type AgentServiceAuthOptions } from "@orbit/service-auth";
 import { resolveAgentServiceBaseUrl } from "./config.js";
 import { createAgentBridgeManifest } from "./bridge.js";
 
@@ -8,7 +9,7 @@ type RequestOptions = {
   allowErrorStatus?: boolean;
 };
 
-type AgentServiceClientOptions = {
+type AgentServiceClientOptions = AgentServiceAuthOptions & {
   baseUrl?: string;
   fetchImpl?: typeof fetch;
 };
@@ -48,7 +49,7 @@ function normalizeManifest(baseUrl: string, manifest: JsonObject): JsonObject {
   const normalizedEndpoints: JsonObject = {};
   for (const [key, value] of Object.entries(endpoints)) {
     normalizedEndpoints[key] =
-      typeof value === "string" ? new URL(value, baseUrl).toString() : value;
+      typeof value === "string" ? resolveServiceEndpoint(value, baseUrl).toString() : value;
   }
   return {
     ...manifest,
@@ -76,12 +77,14 @@ function cloneSession(session: RemoteSessionRecord): RemoteSessionRecord {
 export class AgentServiceClient {
   private readonly baseUrl: string;
   private readonly fetchImpl: typeof fetch;
+  private readonly agentServiceToken: string | undefined;
   private manifest: JsonObject;
   private bridgeStateSnapshot: JsonObject | null = null;
   private readonly sessions = new Map<string, RemoteSessionRecord>();
   private sessionOrder: string[] = [];
 
   constructor(options: AgentServiceClientOptions = {}) {
+    this.agentServiceToken = resolveAgentServiceToken(options);
     this.baseUrl = options.baseUrl ?? resolveAgentServiceBaseUrl();
     this.fetchImpl = options.fetchImpl ?? fetch;
     this.manifest = normalizeManifest(this.baseUrl, createAgentBridgeManifest() as JsonObject);
@@ -295,9 +298,13 @@ export class AgentServiceClient {
     body?: unknown,
     options: RequestOptions = {},
   ): Promise<JsonObject> {
-    const response = await this.fetchImpl(new URL(pathname, this.baseUrl), {
+    const response = await this.fetchImpl(resolveServiceEndpoint(pathname, this.baseUrl), {
       method,
-      headers: body === undefined ? undefined : { "Content-Type": "application/json" },
+      redirect: "error",
+      headers: {
+        ...(body === undefined ? {} : { "Content-Type": "application/json" }),
+        ...(this.agentServiceToken ? { Authorization: `Bearer ${this.agentServiceToken}` } : {}),
+      },
       body: body === undefined ? undefined : JSON.stringify(body),
     });
     const raw = await response.text();
