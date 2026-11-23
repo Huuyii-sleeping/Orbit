@@ -55,12 +55,12 @@
 .compact-console .composer-box:focus-within { outline: 2px solid var(--ring); outline-offset: 2px; }
 .compact-console .send { border-radius: 4px; background: var(--control-bg); color: var(--control-ink); }
 .compact-console .send:hover { background: var(--control-bg); box-shadow: none; }
-.compact-console .set { grid-template-columns: 155px minmax(0, 670px); gap: 38px; }
-.compact-console .set-rail .brand { display: none; }
-.compact-console .set-nav { border: 0; padding: 0; }
-.compact-console .set-nav button { border-radius: 4px; font-size: 12px; font-weight: 400; height: 33px; }
-.compact-console .set-nav button.on, .compact-console .seg button.on { color: var(--text-main); }
+.compact-console .set { grid-template-columns: minmax(0, 1fr); gap: 24px; }
+.compact-console .seg button.on { color: var(--text-main); }
 .compact-console .set-card { border: 0; border-top: 1px solid var(--border-subtle); border-radius: 0; padding: 23px 0; background: none; }
+/* 模型面板不叠加通用操作栏的顶边距。 */
+.compact-console .set-card.model-connections-panel { padding-top: 16px; }
+.compact-console .model-connections-panel > .ag-actions { margin-top: 0; padding-top: 0; }
 .compact-console .toggle { background: var(--surface-active); }
 .compact-console .toggle.on { background: var(--control-bg); }
 .compact-console .toggle i { background: var(--text-muted); }
@@ -70,9 +70,6 @@
 @media (max-width: 1000px) { .compact-console .chat { grid-template-columns: minmax(0, 1fr); } .compact-console .chat > div:last-child { display: none; } }
 @media (max-width: 760px) {
   .compact-console .set { grid-template-columns: minmax(0, 1fr); gap: 24px; }
-  .compact-console .set-nav { flex-direction: row; flex-wrap: wrap; }
-  .compact-console .set-nav button { font-size: 11px; padding: 0 10px; gap: 6px; }
-  .compact-console .set-nav svg { width: 13px; }
   .compact-console .set-panel .h2 { font-size: 21px; }
   .compact-console .view-pad[data-view="chat"] { min-height: calc(100dvh - 116px); }
   .compact-console .ag-actions .btn { max-width: 100%; }

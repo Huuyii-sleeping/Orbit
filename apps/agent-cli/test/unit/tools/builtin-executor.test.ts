@@ -1,6 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
-vi.mock("../../../src/runtime/tool-runtime.js", () => ({
+vi.mock("../../../src/tools/tool-runtime.js", () => ({
   createToolInputParseError: vi.fn((name: string, message: string) =>
     JSON.stringify({ ok: false, error: { code: "TOOL_INPUT_PARSE_ERROR", message: `${name}:${message}` } }),
   ),
@@ -21,7 +21,7 @@ import {
   executeProtectedToolHandler,
   validateToolInput,
   type ToolExecution,
-} from "../../../src/runtime/tool-runtime.js";
+} from "../../../src/tools/tool-runtime.js";
 import { BuiltinToolExecutor } from "../../../src/tools/builtin-executor.js";
 import {
   previewBuiltinToolCall,

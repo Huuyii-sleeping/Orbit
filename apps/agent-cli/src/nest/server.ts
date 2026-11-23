@@ -1,5 +1,6 @@
 import "reflect-metadata";
 import { EventEmitter } from "node:events";
+import { assertAgentServiceListenAddress, resolveAgentServiceToken, type AgentServiceAuthOptions } from "@orbit/service-auth";
 import type { Server } from "node:http";
 import type { Mastra } from "@mastra/core/mastra";
 import { NestFactory } from "@nestjs/core";
@@ -9,12 +10,14 @@ import {
   shutdownMastraRuntime,
 } from "../mastra/instance/factory.js";
 import type { AgentService } from "../service-api/index.js";
-import type { AgentServerLike } from "../service-api/server.js";
+import type { AgentServerLike } from "../entrypoints/server.js";
 import { AgentAppModule } from "./agent-app.module.js";
 import { OrbitHttpExceptionFilter } from "./orbit-http-exception.filter.js";
 import { OrbitShutdownService } from "./orbit-shutdown.service.js";
+import { createAgentServiceAuthMiddleware } from "./agent-service-auth.middleware.js";
 
-export type CreateNestAgentServerOptions = {
+/** Nest HTTP 装配选项；与独立入口共用服务认证和资源关闭契约。 */
+export type CreateNestAgentServerOptions = AgentServiceAuthOptions & {
   mastra?: Mastra;
   runtimeRoot?: string;
   cleanupMastra?: () => Promise<void>;
@@ -29,11 +32,13 @@ class NestAgentServer extends EventEmitter implements AgentServerLike {
   constructor(
     private readonly app: NestExpressApplication,
     private readonly orbitShutdown: OrbitShutdownService,
+    private readonly agentServiceToken: string | undefined,
   ) {
     super();
   }
 
   listen(port: number, host: string, callback?: () => void): this {
+    assertAgentServiceListenAddress(host, this.agentServiceToken);
     if (this.listening) throw new Error("Nest Agent server is already listening");
     this.listening = this.app.listen(port, host)
       .then((server) => {
@@ -80,6 +85,8 @@ export async function createNestAgentHttpServer(
   service: AgentService,
   options: CreateNestAgentServerOptions = {},
 ): Promise<AgentServerLike> {
+  // 生产缺少凭据时必须先失败，不能先初始化数据库或 Runtime。
+  const token = resolveAgentServiceToken(options);
   const sharedRuntime = options.mastra
     ? null
     : await getOrCreateMastraRuntime({ root: options.runtimeRoot });
@@ -103,7 +110,8 @@ export async function createNestAgentHttpServer(
     AgentAppModule.register({ service, mastra, cleanupMastra }),
     { logger: false },
   );
+  app.use(createAgentServiceAuthMiddleware(token));
   app.useGlobalFilters(new OrbitHttpExceptionFilter());
   if (options.enableShutdownHooks) app.enableShutdownHooks(["SIGINT", "SIGTERM"]);
-  return new NestAgentServer(app, app.get(OrbitShutdownService));
+  return new NestAgentServer(app, app.get(OrbitShutdownService), token);
 }

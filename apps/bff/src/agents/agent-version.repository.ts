@@ -9,3 +9,6 @@ export interface AgentVersionRepository extends AgentVersionResolver {
   list(agentProfileId?: string): AgentVersion[];
   getById(agentVersionId: string): AgentVersion | undefined;
 }
+
+/** Agent 版本持久化注入标识，业务层只依赖仓库契约。 */
+export const AGENT_VERSION_REPOSITORY = Symbol("AGENT_VERSION_REPOSITORY");

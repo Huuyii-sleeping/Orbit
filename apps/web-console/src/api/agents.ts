@@ -1,3 +1,4 @@
+import { normalizeAgentConfiguration } from "@orbit/workflow-core";
 import { getErrorMessage } from "../lib/errors/error-factory";
 import {
   type AgentSkillBinding,
@@ -9,6 +10,8 @@ import {
   type AgentProfileInput,
   type AgentVersionCatalogItem,
   type PublishAgentVersionInput,
+  type AgentTestRun,
+  type AgentToolOption,
 } from "./types";
 import {
   type JsonObject,
@@ -27,33 +30,14 @@ import { normalizeRegistrySource, normalizeSourceType } from "./skills";
 
 export const defaultAgentProfileInput: AgentProfileInput = {
   avatarId: "brain",
-  name: "本地研发 Agent",
-  description: "面向代码、文档和自动化执行的本地 agent。",
-  scenario: "本地研发、资料整理、任务拆解和交付验证。",
-  skillIds: ["code-workspace", "memory-context", "quality-gate"],
-  skills: [
-    {
-      skillId: "code-workspace",
-      version: "",
-      sourceType: "builtin",
-      registrySource: "local",
-    },
-    {
-      skillId: "memory-context",
-      version: "",
-      sourceType: "builtin",
-      registrySource: "local",
-    },
-    {
-      skillId: "quality-gate",
-      version: "",
-      sourceType: "builtin",
-      registrySource: "local",
-    },
-  ],
-  actions: ["分析需求", "执行任务", "验证结果"],
-  systemPrompt:
-    "你是一个严谨的本地工作台 agent，优先明确目标、执行验证，并给出可复查的结果。",
+  name: "",
+  description: "",
+  scenario: "",
+  skillIds: [],
+  skills: [],
+  configuration: normalizeAgentConfiguration(undefined),
+  actions: [],
+  systemPrompt: "",
   color: "",
 };
 
@@ -191,6 +175,7 @@ export function normalizeAgentProfile(value: unknown): AgentProfile {
       cleanOptionalText(record.systemPrompt, 1600) ||
       defaultAgentProfileInput.systemPrompt,
     color: cleanColor(record.color),
+    configuration: normalizeAgentConfiguration(record.configuration),
     createdAt: asNumber(record.createdAt),
     updatedAt: asNumber(record.updatedAt),
   };
@@ -209,6 +194,7 @@ export function normalizeAgentProfileInput(value: unknown): AgentProfileInput {
     actions: agent.actions,
     systemPrompt: agent.systemPrompt,
     color: agent.color,
+    configuration: agent.configuration,
   };
 }
 
@@ -225,6 +211,7 @@ export function normalizeAgentVersion(value: unknown): AgentVersionCatalogItem {
     name: cleanText(record.name, "未命名 Agent 版本").slice(0, 120),
     description: cleanOptionalText(record.description, 500),
     instructions: cleanStringList(record.instructions, 32, 4000),
+    modelId: cleanOptionalText(record.modelId, 160),
     toolPolicy: {
       allowedToolIds: cleanStringList(toolPolicy.allowedToolIds, 128, 160),
     },
@@ -351,4 +338,22 @@ export async function resolveAgentSkills(
       ok: false, agent, error: { ...error.metadata, code: error.code, message: error.message },
     });
   }
+}
+
+/** 测试已保存草稿或固定发布版本，不会自动发布。 */
+export async function startAgentTest(agentId: string, inputs: Record<string, unknown>, versionId?: string): Promise<AgentTestRun> {
+  const response = await requestJson<{ data: AgentTestRun }>(`/api/agents/${encodeURIComponent(agentId)}/tests`, jsonRequest("POST", { inputs, versionId }));
+  return response.data;
+}
+
+/** 获取 Runtime 实际注册的工具供用户明确授权。 */
+export async function fetchAgentTools(): Promise<AgentToolOption[]> {
+  const response = await requestJson<{ tools: AgentToolOption[] }>("/api/agents/tools/catalog");
+  return response.tools;
+}
+
+/** 获取最近十次独立试跑及其固定配置。 */
+export async function fetchAgentTests(agentId: string): Promise<AgentTestRun[]> {
+  const response = await requestJson<{ data: AgentTestRun[] }>(`/api/agents/${encodeURIComponent(agentId)}/tests`);
+  return response.data;
 }

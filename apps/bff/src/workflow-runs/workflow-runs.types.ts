@@ -32,6 +32,11 @@ export type { WorkflowNodeRunSnapshot, WorkflowRunSnapshot };
 export interface WorkflowRunsRepository {
   saveRun(run: WorkflowRunSnapshot): void;
   getRun(runId: string): WorkflowRunSnapshot | null;
+  /** 读取指定工作流的近期运行投影。 */
+  listByWorkflow(workflowId: string, limit?: number): WorkflowRunSnapshot[];
   saveEvent(event: WorkflowRuntimeEvent): boolean;
   listEvents(runId: string, sinceId?: number): WorkflowRuntimeEvent[];
 }
+
+/** 运行投影持久化注入标识。 */
+export const WORKFLOW_RUNS_REPOSITORY = Symbol("WORKFLOW_RUNS_REPOSITORY");

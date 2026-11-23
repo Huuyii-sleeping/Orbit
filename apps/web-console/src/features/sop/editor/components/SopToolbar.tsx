@@ -17,7 +17,7 @@ import {
   Upload,
 } from "lucide-react";
 import { BrandMark } from "../../../../components/BrandMark";
-import type { ThemeMode } from "../../../../theme";
+import type { ThemeMode } from "../../../settings/lib/theme";
 import type { SopSaveState } from "../sop-editor-types";
 
 /** 自由画布的单行文档栏，低频文件、布局和运行操作收进菜单。 */

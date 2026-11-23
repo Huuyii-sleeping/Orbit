@@ -1,9 +1,9 @@
 import { Boxes, LayoutList, MessageSquare, Moon, PanelLeftClose, PanelLeftOpen, Settings, Sun, Workflow } from "lucide-react";
 import { BrandMark } from "../BrandMark";
 import type { AppView } from "../../app/types";
-import type { HealthStatus, SessionSummary, AgentProfile, SkillRegistryItem, UserProfile } from "../../api";
-import type { SettingsSection } from "../../settings-route";
-import type { ThemeMode } from "../../theme";
+import type { HealthStatus, SessionSummary, AgentProfile, SkillRegistryItem, UserProfile } from "../../api/index";
+import type { SettingsSection } from "../../features/settings/lib/settings-route";
+import type { ThemeMode } from "../../features/settings/lib/theme";
 
 type SidebarProps = {
   view: AppView;
@@ -12,6 +12,7 @@ type SidebarProps = {
   agents: AgentProfile[];
   installedSkills: SkillRegistryItem[];
   collapsed: boolean;
+  workflowCount?: number | null;
   profile?: UserProfile;
   theme?: ThemeMode;
   onThemeToggle?: () => void;
@@ -28,13 +29,13 @@ const workspaceNav: { label: string; view: AppView; icon: typeof LayoutList }[] 
 ];
 
 /** 工作空间导航、运行连接状态和个人偏好入口。 */
-export function AppSidebar({ view, health, sessions, agents, installedSkills, collapsed, profile, theme, onThemeToggle, onNavigate, onToggleCollapsed, onOpenSettings }: SidebarProps) {
+export function AppSidebar({ view, health, sessions, agents, installedSkills, workflowCount, collapsed, profile, theme, onThemeToggle, onNavigate, onToggleCollapsed, onOpenSettings }: SidebarProps) {
   return (
     <aside id="workspace-sidebar" className="sidebar" aria-label="Orbit 工作台导航">
       <div className="brand"><span className="brand-mark" aria-hidden="true"><BrandMark size={17} /></span><span className="brand-copy"><strong>Orbit</strong><small>个人空间</small></span><button type="button" className="sidebar-collapse-action" aria-label={collapsed ? "展开侧栏" : "折叠侧栏"} title={collapsed ? "展开侧栏" : "折叠侧栏"} onClick={onToggleCollapsed}>{collapsed ? <PanelLeftOpen aria-hidden="true" /> : <PanelLeftClose aria-hidden="true" />}</button></div>
       <nav className="nav" aria-label="工作台导航"><span className="nav-label">工作台</span>
         {workspaceNav.map(({ view: target, label, icon: Icon }) => {
-          const badge = target === "agent" ? agents.length : target === "skills" ? installedSkills.length : target === "chat" ? sessions.length : null;
+          const badge = target === "agent" ? agents.length : target === "skills" ? installedSkills.length : target === "chat" ? sessions.length : workflowCount ?? "—";
           return <button key={target} type="button" className={`nav-item ${view === target ? "on" : ""}`} aria-current={view === target ? "page" : undefined} aria-label={label} title={label} onClick={() => onNavigate(target)}><Icon aria-hidden="true" /><span className="nav-item-label">{label}</span>{badge !== null ? <span className="nav-badge">{badge}</span> : null}</button>;
         })}
       </nav>

@@ -1,14 +1,17 @@
+import type { WorkflowRunStatus } from "@orbit/workflow-core";
 import { ErrorNotice } from "../../../components/feedback/ErrorNotice";
 import { useState } from "react";
 import { Bot, ChevronRight, MessageSquare, RefreshCw } from "lucide-react";
-import type { AgentProfile } from "../../../api";
+import type { AgentProfile } from "../../../api/index";
 import { selectAgentRows, type AgentListFilter, type AgentListSort } from "../lib/agent-list";
 import type { AgentViewProps } from "./agent-view-types";
+
+const testLabels: Record<WorkflowRunStatus, string> = { queued: "测试排队中", running: "测试运行中", waiting: "测试等待中", succeeded: "最近试跑通过", failed: "最近试跑失败", cancelled: "最近试跑已取消" };
 
 const dateFormat = new Intl.DateTimeFormat("zh-CN", { month: "short", day: "numeric", hour: "2-digit", minute: "2-digit" });
 
 /** 使用真实 Agent 草稿与会话数据的紧凑列表。 */
-export function AgentList({ active, agents, query, sessions, installedSkills, error, onRefresh, onNewAgent, onClearQuery, onOpen }: AgentViewProps & { onOpen: (agent: AgentProfile) => void }) {
+export function AgentList({ active, agents, query, sessions, installedSkills, error, onRefresh, onNewAgent, onClearQuery, onOpen, testStates = {} }: Pick<AgentViewProps, "active" | "agents" | "query" | "sessions" | "installedSkills" | "error" | "onRefresh" | "onNewAgent" | "onClearQuery"> & { testStates?: Record<string, WorkflowRunStatus>; onOpen: (agent: AgentProfile) => void }) {
   const [filter, setFilter] = useState<AgentListFilter>("all");
   const [sort, setSort] = useState<AgentListSort>("updated");
   const rows = selectAgentRows(agents, query, filter, sort);
@@ -39,12 +42,12 @@ export function AgentList({ active, agents, query, sessions, installedSkills, er
           <div className="agent-table-wrap">
             <table className="compact-agent-table">
               <thead><tr><th scope="col">名称</th><th scope="col">状态</th><th scope="col">技能</th><th scope="col">最近更新</th><th scope="col"><span className="sr-only">操作</span></th></tr></thead>
-              <tbody>{rows.map((agent) => <tr key={agent.id}>
-                <td><button type="button" className="agent-row-name" onClick={() => onOpen(agent)}><span className="row-icon"><Bot aria-hidden="true" /></span><span><strong>{agent.name}</strong><small>{agent.scenario || agent.description || "未设置职责"}</small></span></button></td>
-                <td><span className="row-state"><i />草稿</span></td>
+              <tbody>{rows.map((agent) => <tr key={agent.id} className="agent-clickable-row" onClick={() => onOpen(agent)}>
+                <td><button type="button" className="agent-row-name" onClick={(event) => { event.stopPropagation(); onOpen(agent); }}><span className="row-icon"><Bot aria-hidden="true" /></span><span><strong>{agent.name}</strong><small>{agent.scenario || agent.description || "未填写说明"}</small></span></button></td>
+                <td><span className="row-state"><i />{testStates[agent.id] ? testLabels[testStates[agent.id]] : "草稿"}</span></td>
                 <td>{agent.skills.length} 项技能</td>
                 <td><time dateTime={agent.updatedAt ? new Date(agent.updatedAt).toISOString() : undefined}>{agent.updatedAt ? dateFormat.format(agent.updatedAt) : "—"}</time></td>
-                <td><button type="button" className="tool-btn" aria-label={`编辑 ${agent.name}`} onClick={() => onOpen(agent)}><ChevronRight aria-hidden="true" /></button></td>
+                <td><button type="button" className="tool-btn" aria-label={`编辑 ${agent.name}`} onClick={(event) => { event.stopPropagation(); onOpen(agent); }}><ChevronRight aria-hidden="true" /></button></td>
               </tr>)}</tbody>
             </table>
           </div>

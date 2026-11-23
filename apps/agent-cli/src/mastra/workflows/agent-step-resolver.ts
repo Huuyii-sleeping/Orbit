@@ -1,7 +1,8 @@
 import type { LlmNodeConfig } from "@orbit/workflow-core";
 import type { AgentUsage } from "@orbit/runtime-contracts";
 import { RequestContext } from "@mastra/core/request-context";
-import { resolveOpenAiBaseUrl } from "../../config.js";
+import { ModelCatalog } from "../models/model-catalog.js";
+import { resolveMastraModel } from "../models/model-resolver.js";
 import type { ModelPolicyServiceLike } from "../../services/model-policy-service.js";
 import { MastraAgentDefinitionRegistry } from "../agents/definition-registry.js";
 import {
@@ -15,8 +16,7 @@ import type { MastraWorkflowAgentResolver } from "./agent-executor.js";
 type ResolverOptions = {
   registry: MastraAgentDefinitionRegistry;
   modelPolicyService: ModelPolicyServiceLike;
-  baseUrl?: string;
-  apiKey?: string;
+  modelCatalog?: ModelCatalog;
 };
 
 function estimateTokens(input: string): number {
@@ -33,7 +33,11 @@ function textDelta(chunk: unknown): string {
 
 /** 复用 model policy 与共享 Agent registry 解析 Workflow LLM 节点。 */
 export class OrbitMastraWorkflowAgentResolver implements MastraWorkflowAgentResolver {
-  constructor(private readonly options: ResolverOptions) {}
+  private readonly modelCatalog: ModelCatalog;
+
+  constructor(private readonly options: ResolverOptions) {
+    this.modelCatalog = options.modelCatalog ?? new ModelCatalog();
+  }
 
   async stream(input: Parameters<MastraWorkflowAgentResolver["stream"]>[0]) {
     const config = input.node.config as LlmNodeConfig;
@@ -45,17 +49,14 @@ export class OrbitMastraWorkflowAgentResolver implements MastraWorkflowAgentReso
     if (selection.budgetAction === "deny") {
       throw new Error(`模型预算拒绝执行：${selection.budgetReason ?? "budget denied"}`);
     }
+    const resolvedModel = await resolveMastraModel(selection.model, this.modelCatalog, { temperature: config.temperature !== undefined });
     const registered = this.options.registry.resolve({
       agentId: `workflow:${input.workflowId}:${input.node.id}`,
       agentVersion: String(input.node.nodeVersion),
       name: input.node.label,
       instructions: config.systemPrompt ? [config.systemPrompt] : ["Execute this workflow LLM step."],
-      model: {
-        providerId: "openai",
-        modelId: selection.model,
-        url: this.options.baseUrl ?? resolveOpenAiBaseUrl(),
-        apiKey: this.options.apiKey ?? process.env.OPENAI_API_KEY,
-      },
+      model: resolvedModel.model,
+      modelConfigKey: resolvedModel.modelConfigKey,
       tools: {},
       toolIds: [],
       skillIds: [],
@@ -74,6 +75,7 @@ export class OrbitMastraWorkflowAgentResolver implements MastraWorkflowAgentReso
       abortSignal: input.signal,
       requestContext,
       activeTools: [],
+      providerOptions: resolvedModel.providerOptions,
       modelSettings: config.temperature === undefined ? undefined : { temperature: config.temperature },
     });
     for await (const chunk of output.fullStream) {

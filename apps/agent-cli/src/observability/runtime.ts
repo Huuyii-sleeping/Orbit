@@ -7,8 +7,8 @@ import {
   RUNTIME_CONFIG,
   getPrivacyConfig,
   shouldPersistObservabilityEvent,
-} from "../runtime-config.js";
-import { nowTimestampMs, parseTimestampMs } from "../time.js";
+} from "../config/runtime-config.js";
+import { nowTimestampMs, parseTimestampMs } from "../lib/time.js";
 
 type ObservabilityMetrics = {
   schemaVersion: number;

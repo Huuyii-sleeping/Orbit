@@ -1,5 +1,5 @@
 import path from "node:path";
-import { isLocalPersistenceEnabled } from "../../runtime-config.js";
+import { isLocalPersistenceEnabled } from "../../config/runtime-config.js";
 import { JsonFileRepository } from "./json-file-repository.js";
 import { resolveMastraRuntimePaths } from "./paths.js";
 

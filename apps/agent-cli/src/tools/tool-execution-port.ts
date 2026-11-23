@@ -9,7 +9,7 @@ import {
   type ToolExecutionResult,
   type ToolListContext,
 } from "@orbit/runtime-contracts";
-import { executeProtectedToolHandler } from "../runtime/tool-runtime.js";
+import { executeProtectedToolHandler } from "./tool-runtime.js";
 import type { ToolRegistration } from "./protocol.js";
 
 export type ToolExecutionServiceLike = {
@@ -27,7 +27,7 @@ const MEMORY_TOOL_IDS = new Set([
 
 function record(value: unknown): Record<string, unknown> {
   return value && typeof value === "object" && !Array.isArray(value)
-    ? value as Record<string, unknown>
+    ? (value as Record<string, unknown>)
     : {};
 }
 
@@ -102,21 +102,24 @@ export class ToolServiceExecutionPort implements ToolExecutionPort {
     }
     const startedAt = Date.now();
     const rawArguments = command.requestContext.argumentsJson;
-    const argumentsJson = typeof rawArguments === "string"
-      ? rawArguments
-      : JSON.stringify(command.input ?? {});
-    const execution = MEMORY_TOOL_IDS.has(command.toolId)
-      ? this.executeMemoryTool(command)
-      : this.service.runToolByName(command.toolId, argumentsJson);
+    const argumentsJson =
+      typeof rawArguments === "string" ? rawArguments : JSON.stringify(command.input ?? {});
+    let abort: (() => void) | undefined;
     try {
+      const execution = MEMORY_TOOL_IDS.has(command.toolId)
+        ? this.executeMemoryTool(command)
+        : this.service.runToolByName(command.toolId, argumentsJson);
       const output = command.abortSignal
         ? await Promise.race([
             execution,
             new Promise<never>((_resolve, reject) => {
-              const abort = () => reject(
-                new RuntimePortError("RUNTIME_CANCELLED", `Tool ${command.toolId} 已取消。`),
-              );
+              abort = () =>
+                reject(
+                  new RuntimePortError("RUNTIME_CANCELLED", `Tool ${command.toolId} 已取消。`),
+                );
               command.abortSignal!.addEventListener("abort", abort, { once: true });
+              // 工具启动时也可能同步触发取消，注册监听后再次检查，避免错过信号。
+              if (command.abortSignal!.aborted) abort();
             }),
           ])
         : await execution;
@@ -127,9 +130,10 @@ export class ToolServiceExecutionPort implements ToolExecutionPort {
           error?: { code?: unknown; message?: unknown; details?: unknown };
         };
         if (record.ok === false && record.error) {
-          const details = record.error.details && typeof record.error.details === "object"
-            ? record.error.details as Record<string, unknown>
-            : {};
+          const details =
+            record.error.details && typeof record.error.details === "object"
+              ? (record.error.details as Record<string, unknown>)
+              : {};
           throw new RuntimePortError(
             errorCode(record.error),
             String(record.error.message ?? `Tool ${command.toolId} 执行失败。`),
@@ -144,6 +148,8 @@ export class ToolServiceExecutionPort implements ToolExecutionPort {
         errorCode(error),
         error instanceof Error ? error.message : String(error),
       );
+    } finally {
+      if (abort) command.abortSignal?.removeEventListener("abort", abort);
     }
   }
 
@@ -155,18 +161,22 @@ export class ToolServiceExecutionPort implements ToolExecutionPort {
       );
     }
     const input = record(command.input);
-    const threadId = command.executor.sessionId
-      ?? (typeof input.thread_id === "string" ? input.thread_id : undefined)
-      ?? (typeof command.requestContext.threadId === "string" ? command.requestContext.threadId : undefined);
+    const threadId =
+      (typeof command.requestContext.threadId === "string"
+        ? command.requestContext.threadId
+        : undefined) ??
+      command.executor.sessionId ??
+      (typeof input.thread_id === "string" ? input.thread_id : undefined);
     if (!threadId) {
       throw new RuntimePortError(
         "RUNTIME_CAPABILITY_UNSUPPORTED",
         `Tool ${command.toolId} 需要 session/thread 上下文。`,
       );
     }
-    const resourceId = typeof command.requestContext.resourceId === "string"
-      ? command.requestContext.resourceId
-      : `session:${threadId}`;
+    const resourceId =
+      typeof command.requestContext.resourceId === "string"
+        ? command.requestContext.resourceId
+        : `session:${threadId}`;
     const ownership = { ownerId: command.ownerId, resourceId, threadId };
     const readOnly = command.toolId !== "memory_add";
     return executeProtectedToolHandler({
@@ -191,15 +201,17 @@ export class ToolServiceExecutionPort implements ToolExecutionPort {
             }
             await this.memory!.appendMessages({
               ...ownership,
-              messages: [{
-                role: "system",
-                content,
-                metadata: {
-                  type: input.type,
-                  tags: input.tags,
-                  confidence: input.confidence,
+              messages: [
+                {
+                  role: "system",
+                  content,
+                  metadata: {
+                    type: input.type,
+                    tags: input.tags,
+                    confidence: input.confidence,
+                  },
                 },
-              }],
+              ],
             });
             return JSON.stringify({ ok: true, threadId, resourceId });
           }
@@ -207,7 +219,9 @@ export class ToolServiceExecutionPort implements ToolExecutionPort {
             ...ownership,
             limit: positiveLimit(input.limit, command.toolId === "memory_doctor" ? 100 : 20),
           });
-          const query = String(input.query ?? "").trim().toLowerCase();
+          const query = String(input.query ?? "")
+            .trim()
+            .toLowerCase();
           const matched = query
             ? page.items.filter((message) => messageText(message).toLowerCase().includes(query))
             : page.items;

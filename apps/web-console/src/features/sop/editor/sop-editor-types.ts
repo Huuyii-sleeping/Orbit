@@ -1,5 +1,5 @@
 import type { WorkflowDraft } from "@orbit/workflow-core";
-import type { ThemeMode } from "../../../theme";
+import type { ThemeMode } from "../../settings/lib/theme";
 
 /** 编辑器显示真实保存状态，不用本地修改次数代替保存结果。 */
 export type SopSaveState = "idle" | "saving" | "saved" | "error" | "conflict";

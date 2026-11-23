@@ -112,11 +112,14 @@ export class MastraWorkflowAgentNodeExecutor implements WorkflowNodeExecutor {
       runId: childRunId,
       agentId: version.agentProfileId,
       agentVersion: version.id,
+      modelId: version.modelId,
+      skillBindings: structuredClone(version.skillPolicy.bindings),
       sessionId: stableId("workflow-agent-session", identityParts),
       resourceId: stableId("workflow-resource", [ownerId, context.runId]),
       threadId: stableId("workflow-agent-thread", identityParts),
       messages: [
         ...version.instructions.map((content) => ({ role: "system" as const, content })),
+        { role: "system", content: `Return a JSON object matching this output schema. Do not wrap it in Markdown: ${stableSerialize(version.outputSchema)}` },
         { role: "user", content: stableSerialize(inputs) },
       ],
       requestContext: {

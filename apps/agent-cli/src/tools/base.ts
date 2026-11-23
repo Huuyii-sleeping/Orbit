@@ -1,5 +1,5 @@
 import type { ChatCompletionTool } from "openai/resources/chat/completions";
-import { executeProtectedToolHandler } from "../runtime/tool-runtime.js";
+import { executeProtectedToolHandler } from "./tool-runtime.js";
 import { DEFAULT_DELIVERY_SERVICE } from "../services/delivery-service.js";
 import {
   runAutonomyMarkActive,
@@ -8,7 +8,7 @@ import {
   runAutonomyTick,
 } from "./autonomy.js";
 import { BASH_TOOLS, readCommandArgs, runBash } from "./bash.js";
-import { BACKGROUND_TOOLS, runBackgroundRun, runCheckBackground } from "./background-task.js";
+import { BACKGROUND_TOOLS, runBackgroundRun, runCheckBackground } from "./background/background-task.js";
 import {
   CONTEXT_TOOLS,
   getCompactRuntimeContext,
@@ -24,7 +24,7 @@ import {
   runTaskGet,
   runTaskList,
   runTaskUpdate,
-} from "./task-board.js";
+} from "./tasks/task-board.js";
 import {
   runScheduleCreate,
   runScheduleExplain,
@@ -35,7 +35,7 @@ import {
   runScheduleStats,
   runScheduleUpdate,
   SCHEDULER_TOOLS,
-} from "./scheduler.js";
+} from "./scheduler/scheduler.js";
 import { runListSkills, runLoadSkill, SKILL_TOOLS } from "./skills.js";
 import {
   TEAM_TOOLS,
@@ -51,7 +51,7 @@ import {
   runTeamSetStatus,
   runTeamShutdownRequest,
   runTeamShutdownResponse,
-} from "./team.js";
+} from "./team/team.js";
 import {
   SECURITY_TOOLS,
   runSecurityApprove,
@@ -60,7 +60,7 @@ import {
   runSecurityReject,
   runSecurityReloadPolicy,
   runSecurityRequestApproval,
-} from "./security.js";
+} from "./security/security.js";
 import { TODO_TOOLS, runTodo } from "./todo.js";
 import {
   WORKTREE_TOOLS,
@@ -71,7 +71,7 @@ import {
   runWorktreeList,
   runWorktreeRemove,
   runWorktreeRun,
-} from "./worktree.js";
+} from "./worktree/worktree.js";
 
 type ToolHandler = (args: Record<string, unknown>) => Promise<string>;
 

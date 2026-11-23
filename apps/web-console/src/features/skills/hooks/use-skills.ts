@@ -12,7 +12,7 @@ import {
   type SkillAuditEvent,
   type SkillPackageInput,
   type SkillRegistryItem,
-} from "../../../api";
+} from "../../../api/index";
 
 /** 管理真实 Skill Hub 数据和互斥的技能生命周期操作。 */
 export function useSkills(setError: (error: string | null) => void) {

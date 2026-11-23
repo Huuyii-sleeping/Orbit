@@ -11,13 +11,11 @@ import {
   type AgentProfileInput,
   type AgentRuntimeContext,
   type AgentSkillPreflightResult,
-  type SkillRegistryItem,
-} from "../../../api";
+} from "../../../api/index";
 import { agentDraftFromProfile } from "../lib/agent-profile";
 
 /** 管理 Agent 草稿、保存和绑定技能检查。 */
 export function useAgents(
-  skillRegistry: SkillRegistryItem[],
   onOpen: () => void,
 ) {
   const [agents, setAgents] = useState<AgentProfile[]>([]);
@@ -36,7 +34,6 @@ export function useAgents(
     () => agents.find((agent) => agent.id === activeAgentId) ?? null,
     [agents, activeAgentId],
   );
-  const installedSkills = skillRegistry.filter((skill) => skill.installed);
 
   function runtimeContextFromDraft(): AgentRuntimeContext {
     return {
@@ -73,30 +70,6 @@ export function useAgents(
     }
   }
 
-  function normalizedAgentDraftForSave(): AgentProfileInput {
-    if (skillRegistry.length === 0) {
-      return agentDraft;
-    }
-    const installedById = new Map(
-      installedSkills.map((skill) => [skill.id, skill]),
-    );
-    const skillIds = agentDraft.skillIds.filter((skillId) =>
-      installedById.has(skillId),
-    );
-    return {
-      ...agentDraft,
-      skillIds,
-      skills: skillIds.map((skillId) => {
-        const skill = installedById.get(skillId);
-        return {
-          skillId,
-          version: skill?.installedVersion || skill?.version || "",
-          sourceType: skill?.sourceType ?? "builtin",
-          registrySource: skill?.registrySource ?? "local",
-        };
-      }),
-    };
-  }
 
   function selectAgent(agent: AgentProfile): void {
     setActiveAgentId(agent.id);
@@ -109,7 +82,6 @@ export function useAgents(
     setActiveAgentId(null);
     setAgentDraft({
       ...defaultAgentProfileInput,
-      name: `新 Agent ${agents.length + 1}`,
     });
     setAgentSkillPreflight(null);
     setIsNewAgentDraft(true);
@@ -136,13 +108,17 @@ export function useAgents(
     }
   }
 
-  async function handleSaveAgent(): Promise<void> {
+  async function handleSaveAgent() {
     if (!activeAgent && !isNewAgentDraft) {
-      return;
+      return null;
+    }
+    if (!agentDraft.name.trim() || !agentDraft.systemPrompt.trim()) {
+      setAgentError("请填写 Agent 名称和职责。");
+      return null;
     }
     setAgentSaving(true);
     try {
-      const draftToSave = normalizedAgentDraftForSave();
+      const draftToSave = agentDraft;
       const agent = activeAgent
         ? await updateAgentProfile(activeAgent.id, draftToSave)
         : await createAgentProfile(draftToSave);
@@ -157,8 +133,10 @@ export function useAgents(
       setIsNewAgentDraft(false);
       onOpen();
       setAgentError(null);
+      return agent;
     } catch (err) {
       setAgentError(getErrorMessage(err));
+      return null;
     } finally {
       setAgentSaving(false);
     }

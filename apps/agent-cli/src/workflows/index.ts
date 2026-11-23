@@ -3,7 +3,6 @@ export * from "./executor-registry.js";
 export * from "./compiler-adapter.js";
 export * from "./executors/index.js";
 export * from "./executors/basic.js";
-export * from "./executors/llm.js";
 export * from "./executors/tool.js";
 export * from "./executors/http.js";
 export * from "./executors/code.js";

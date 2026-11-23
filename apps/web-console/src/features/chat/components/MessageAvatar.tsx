@@ -1,5 +1,5 @@
 import { Bot, CircleDot, UserRound, Wrench } from "lucide-react";
-import type { ChatMessage } from "../../../api";
+import type { ChatMessage } from "../../../api/index";
 
 export function MessageAvatar({ role }: { role: ChatMessage["role"] }) {
   const Icon = role === "user" ? UserRound : role === "tool" ? Wrench : role === "system" ? CircleDot : Bot;

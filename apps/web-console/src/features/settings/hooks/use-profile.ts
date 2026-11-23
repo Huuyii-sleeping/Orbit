@@ -5,13 +5,13 @@ import {
   fetchProfile,
   updateProfile,
   type UserProfile,
-} from "../../../api";
+} from "../../../api/index";
 import {
   getNextTheme,
   readStoredTheme,
   writeStoredTheme,
   type ThemeMode,
-} from "../../../theme";
+} from "../lib/theme";
 
 /** 管理个人资料编辑和主题偏好。 */
 export function useProfile(setError: (error: string | null) => void) {

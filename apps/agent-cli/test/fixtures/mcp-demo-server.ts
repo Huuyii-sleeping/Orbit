@@ -41,8 +41,7 @@ function isJsonRecord(value: unknown): value is JsonRecord {
 
 function send(message: unknown): void {
   const body = JSON.stringify(message);
-  const header = `Content-Length: ${Buffer.byteLength(body, "utf8")}\r\n\r\n`;
-  process.stdout.write(`${header}${body}`);
+  process.stdout.write(`${body}\n`);
 }
 
 async function handleMessage(message: unknown): Promise<void> {
@@ -241,22 +240,10 @@ async function handleMessage(message: unknown): Promise<void> {
 process.stdin.on("data", (chunk: Buffer) => {
   buffer = Buffer.concat([buffer, chunk]);
   while (true) {
-    const headerEnd = buffer.indexOf("\r\n\r\n");
-    if (headerEnd === -1) {
-      return;
-    }
-    const header = buffer.slice(0, headerEnd).toString("utf8");
-    const match = /Content-Length:\s*(\d+)/i.exec(header);
-    if (!match) {
-      process.exit(1);
-    }
-    const bodyLength = Number(match[1]);
-    const frameEnd = headerEnd + 4 + bodyLength;
-    if (buffer.length < frameEnd) {
-      return;
-    }
-    const body = buffer.slice(headerEnd + 4, frameEnd).toString("utf8");
-    buffer = buffer.slice(frameEnd);
+    const newline = buffer.indexOf("\n");
+    if (newline < 0) return;
+    const body = buffer.subarray(0, newline).toString("utf8");
+    buffer = buffer.subarray(newline + 1);
     try {
       void handleMessage(JSON.parse(body) as unknown);
     } catch {

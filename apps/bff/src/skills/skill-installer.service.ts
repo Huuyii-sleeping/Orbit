@@ -1,6 +1,6 @@
 import { compare, valid } from "semver";
 import { Inject, Injectable } from "@nestjs/common";
-import { LocalStoreService } from "../local-store.service.js";
+import { LocalStoreService } from "../storage/local-store.service.js";
 import type {
   RemoteSkillRegistry,
   SkillAuditAction,
@@ -176,8 +176,8 @@ export function normalizeSkillStoreState(value: unknown): SkillStoreState {
 export class SkillInstallerService {
   constructor(
     @Inject(LocalStoreService) private readonly localStore: LocalStoreService,
-    private readonly skillStore: SkillStoreService,
-    private readonly validator: SkillValidatorService,
+    @Inject(SkillStoreService) private readonly skillStore: SkillStoreService,
+    @Inject(SkillValidatorService) private readonly validator: SkillValidatorService,
   ) {}
 
   /** Reads persisted Skill Hub lifecycle state. */

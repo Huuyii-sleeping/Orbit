@@ -1,4 +1,4 @@
-import { RUNTIME_CONFIG } from "../runtime-config.js";
+import { RUNTIME_CONFIG } from "../config/runtime-config.js";
 
 export type LocalArtifactKind =
   | "session"

@@ -1,5 +1,5 @@
 import type { ChatCompletionTool } from "openai/resources/chat/completions";
-import { parseToolArgs } from "../runtime/tool-runtime.js";
+import { parseToolArgs } from "./tool-runtime.js";
 import { BASE_TOOLS, previewBaseToolCall, resolveBaseToolHandler } from "./base.js";
 import { isFunctionTool, toChatCompletionTool, type ToolExecutionProfile, type ToolRegistration } from "./protocol.js";
 import {
@@ -9,7 +9,7 @@ import {
   runSubagentSend,
   runSubagentSpawn,
   runSubagentWait,
-} from "./subagent.js";
+} from "./subagent/subagent.js";
 
 type ToolHandler = (args: Record<string, unknown>) => Promise<string>;
 

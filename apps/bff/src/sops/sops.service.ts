@@ -10,12 +10,13 @@ import {
   type WorkflowDraft,
   type WorkflowStageECapabilityRegistry,
   type WorkflowVersion,
+  type AgentVersionResolver,
 } from "@orbit/workflow-core";
 import { randomUUID } from "node:crypto";
-import { SqliteAgentVersionRepository } from "../agents/sqlite-agent-version.repository.js";
-import { SopDatabase } from "./sop-database.js";
+import { AGENT_VERSION_REPOSITORY } from "../agents/agent-version.repository.js";
+import { SopDatabase } from "../storage/sop-database.js";
 import { SopNotFoundError, SopRevisionConflictError, SopValidationError } from "./sops.errors.js";
-import { SqliteSopsRepository } from "./sqlite-sops.repository.js";
+import { SOPS_REPOSITORY, type SopsRepository } from "./sops.repository.js";
 import { WORKFLOW_STAGE_E_CAPABILITY_REGISTRY } from "./workflow-stage-e-capabilities.js";
 import type {
   PublishSopInput,
@@ -57,9 +58,9 @@ function changedIds<T extends { id: string }>(from: T[], to: T[]): { added: stri
 @Injectable()
 export class SopsService {
   constructor(
-    @Inject(SqliteSopsRepository) private readonly repository: SqliteSopsRepository,
-    @Inject(SopDatabase) private readonly storage: SopDatabase,
-    @Inject(SqliteAgentVersionRepository) private readonly agentVersions?: SqliteAgentVersionRepository,
+    @Inject(SOPS_REPOSITORY) private readonly repository: SopsRepository,
+    @Inject(SopDatabase) private readonly storage: Pick<SopDatabase, "health" | "backup" | "restore">,
+    @Inject(AGENT_VERSION_REPOSITORY) private readonly agentVersions?: AgentVersionResolver,
     @Inject(WORKFLOW_STAGE_E_CAPABILITY_REGISTRY) private readonly stageECapabilities?: WorkflowStageECapabilityRegistry,
   ) {}
 

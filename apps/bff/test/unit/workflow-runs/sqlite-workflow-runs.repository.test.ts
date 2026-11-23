@@ -2,7 +2,7 @@ import { mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
-import { SopDatabase } from "../../../src/sops/sop-database.js";
+import { SopDatabase } from "../../../src/storage/sop-database.js";
 import { SqliteWorkflowRunsRepository } from "../../../src/workflow-runs/sqlite-workflow-runs.repository.js";
 import type { WorkflowRunSnapshot } from "../../../src/workflow-runs/workflow-runs.types.js";
 

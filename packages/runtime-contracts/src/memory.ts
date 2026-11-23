@@ -59,6 +59,24 @@ export type AppendMemoryMessagesCommand = GetMemoryThreadQuery & {
   }>;
 };
 
+/** 保留原线程，将摘要和指定的最近消息复制到新的执行线程。 */
+export type CompactMemoryThreadCommand = GetMemoryThreadQuery & {
+  summary: string;
+  retainedMessageIds: string[];
+};
+
+/** 会话压缩的实际 Memory 变化；原线程继续保留用于追溯。 */
+export type SessionCompactionResult = {
+  sourceThreadId: string;
+  threadId: string;
+  keptRecent: number;
+  oldMessageCount: number;
+  newMessageCount: number;
+  estimatedBefore: number;
+  estimatedAfter: number;
+  reducedBy: number;
+};
+
 /** Memory thread 分页结果。 */
 export type MemoryThreadPage = {
   items: MemoryThread[];
@@ -79,4 +97,6 @@ export interface MemoryRuntimePort {
   deleteThread(command: DeleteMemoryThreadCommand): Promise<void>;
   listMessages(query: ListMemoryMessagesQuery): Promise<MemoryMessagePage>;
   appendMessages(command: AppendMemoryMessagesCommand): Promise<void>;
+  /** 支持非破坏性压缩的后端提供此能力；未实现时调用方应明确拒绝。 */
+  compactThread?(command: CompactMemoryThreadCommand): Promise<MemoryThread>;
 }

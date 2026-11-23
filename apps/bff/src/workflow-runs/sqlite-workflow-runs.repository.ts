@@ -1,6 +1,6 @@
 import { Inject, Injectable, Optional } from "@nestjs/common";
 import { applyWorkflowRuntimeEventToSnapshot, type WorkflowRuntimeEvent } from "@orbit/workflow-core";
-import { SopDatabase } from "../sops/sop-database.js";
+import { SopDatabase } from "../storage/sop-database.js";
 import type { WorkflowNodeRunSnapshot, WorkflowRunSnapshot, WorkflowRunsRepository } from "./workflow-runs.types.js";
 
 type RunRow = {
@@ -124,6 +124,13 @@ export class SqliteWorkflowRunsRepository implements WorkflowRunsRepository {
         durationMs: node.duration_ms ?? undefined,
       }])),
     };
+  }
+
+  /** 按工作流读取近期运行投影，独立 Agent 测试也沿用同一保留期。 */
+  listByWorkflow(workflowId: string, limit = 10): WorkflowRunSnapshot[] {
+    this.cleanupExpired();
+    const rows = this.storage.database.prepare("select id from workflow_runs where workflow_id = ? order by created_at desc, rowid desc limit ?").all(workflowId, limit) as Array<{ id: string }>;
+    return rows.flatMap(({ id }) => { const run = this.getRun(id); return run ? [run] : []; });
   }
 
   saveEvent(event: WorkflowRuntimeEvent): boolean {

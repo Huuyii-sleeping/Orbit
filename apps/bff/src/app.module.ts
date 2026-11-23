@@ -1,53 +1,44 @@
 import { Module } from "@nestjs/common";
-import { AgentProxyService, type AgentProxyOptions } from "./agent-proxy.service.js";
-import { AgentsController } from "./agents/agents.controller.js";
-import { AgentProfileService } from "./agents/agent-profile.service.js";
-import { AgentVersionsController } from "./agents/agent-versions.controller.js";
-import { AgentVersionService } from "./agents/agent-version.service.js";
-import { SqliteAgentVersionRepository } from "./agents/sqlite-agent-version.repository.js";
-import { AppController } from "./app.controller.js";
-import { LocalStoreService, type LocalStoreOptions } from "./local-store.service.js";
-import { ProfileService } from "./profile.service.js";
-import { SettingsService } from "./settings.service.js";
-import { SkillInstallerService } from "./skills/skill-installer.service.js";
-import { SkillRegistryService, type SkillRegistryOptions } from "./skills/skill-registry.service.js";
-import { SkillStoreService } from "./skills/skill-store.service.js";
-import { SkillValidatorService } from "./skills/skill-validator.service.js";
-import { SkillsController } from "./skills/skills.controller.js";
+import type { AgentProxyOptions } from "./runtime-connection/agent-proxy.service.js";
+import { AgentsModule } from "./agents/agents.module.js";
+import { AgentVersionStorageModule } from "./agents/agent-version-storage.module.js";
+import type { LocalStoreOptions } from "./storage/local-store.service.js";
+import { RuntimeModule } from "./runtime-connection/runtime.module.js";
+import { SessionsModule } from "./sessions/sessions.module.js";
+import type { SkillRegistryOptions } from "./skills/skill-registry.service.js";
+import { SkillsModule } from "./skills/skills.module.js";
+import { LocalStoreModule } from "./storage/local-store.module.js";
+import { ProductDatabaseModule } from "./storage/product-database.module.js";
 import { SopsModule, type SopsModuleOptions } from "./sops/sops.module.js";
-import { SopDatabase } from "./sops/sop-database.js";
 import { WorkflowRunsModule } from "./workflow-runs/workflow-runs.module.js";
+import { WorkspaceModule } from "./workspace/workspace.module.js";
+import { ModelsModule } from "./models/models.module.js";
 
+/** BFF 进程启动配置，各领域仅接收自己需要的配置和共享资源。 */
 export type AppModuleOptions = AgentProxyOptions & LocalStoreOptions & SkillRegistryOptions & SopsModuleOptions;
 
+/** 只装配业务模块和共享资源，不注册业务 controller 或 service。 */
 @Module({})
 export class AppModule {
   static register(options: AppModuleOptions) {
-    const localStoreService = new LocalStoreService(options);
-    const skillValidatorService = new SkillValidatorService();
-    const skillStoreService = new SkillStoreService(skillValidatorService, options);
-    const skillInstallerService = new SkillInstallerService(localStoreService, skillStoreService, skillValidatorService);
-    const sopDatabase = new SopDatabase(options);
-    const agentVersionRepository = new SqliteAgentVersionRepository(sopDatabase);
+    const store = LocalStoreModule.register(options);
+    const database = ProductDatabaseModule.register(options);
+    const versions = AgentVersionStorageModule.register(database);
+    const runtime = RuntimeModule.register(options);
+    const skills = SkillsModule.register(options, store);
+    const sops = SopsModule.register(options, database, versions);
+    const runs = WorkflowRunsModule.register({ runtime, database, versions, sops });
     return {
       module: AppModule,
       imports: [
-        SopsModule.register(options, sopDatabase, agentVersionRepository),
-        WorkflowRunsModule.register(options, sopDatabase, agentVersionRepository),
-      ],
-      controllers: [AgentsController, AgentVersionsController, SkillsController, AppController],
-      providers: [
-        { provide: AgentProxyService, useValue: new AgentProxyService(options) },
-        { provide: LocalStoreService, useValue: localStoreService },
-        { provide: SkillValidatorService, useValue: skillValidatorService },
-        { provide: SkillStoreService, useValue: skillStoreService },
-        { provide: SkillInstallerService, useValue: skillInstallerService },
-        { provide: SkillRegistryService, useValue: new SkillRegistryService(localStoreService, skillStoreService, skillInstallerService) },
-        { provide: SqliteAgentVersionRepository, useValue: agentVersionRepository },
-        AgentVersionService,
-        AgentProfileService,
-        ProfileService,
-        SettingsService,
+        runtime,
+        ModelsModule.register(runtime),
+        WorkspaceModule.register(store),
+        SessionsModule.register(runtime),
+        skills,
+        sops,
+        runs,
+        AgentsModule.register({ store, versions, skills, runs, runtime }),
       ],
     };
   }

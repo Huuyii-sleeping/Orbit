@@ -12,7 +12,7 @@ import type { WorkflowRunSnapshot } from "@orbit/workflow-core";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { createNestAgentHttpServer } from "../../src/nest/server.js";
 import type { AgentService } from "../../src/service-api/index.js";
-import type { AgentServerLike } from "../../src/service-api/server.js";
+import type { AgentServerLike } from "../../src/entrypoints/server.js";
 
 const servers: AgentServerLike[] = [];
 
@@ -53,7 +53,13 @@ function createRuntimeGateway(): RuntimeGateway {
       toolExecutions: [],
     }),
     stream: async function* (command) {
-      yield { id: 0, runId: command.runId ?? "agent-run-1", at: 1, type: "text.delta", delta: "agent-result" };
+      yield {
+        id: 0,
+        runId: command.runId ?? "agent-run-1",
+        at: 1,
+        type: "text.delta",
+        delta: "agent-result",
+      };
     },
     getRun: async (runId) => ({
       id: runId,
@@ -87,7 +93,7 @@ function createRuntimeGateway(): RuntimeGateway {
       restartRecovery: true,
     }),
     start: async () => workflowRun(),
-    get: async (runId) => runId === "missing" ? null : { ...workflowRun(), id: runId },
+    get: async (runId) => (runId === "missing" ? null : { ...workflowRun(), id: runId }),
     cancel: async () => workflowRun("cancelled"),
     events: async function* ({ runId }) {
       yield { id: 1, runId, at: 2, type: "run.status", status: "succeeded" };
@@ -151,7 +157,21 @@ function createService(): AgentService {
     subscribeEvents: () => () => undefined,
     listSessions: () => [session],
     createSession: () => session,
-    getSessionDetail: (sessionId: string) => sessionId === session.id ? session : null,
+    getSessionDetail: (sessionId: string) => (sessionId === session.id ? session : null),
+    compactSession: vi.fn(async (sessionId: string, keepRecent = 20) => {
+      if (sessionId !== session.id)
+        throw Object.assign(new Error("session not found"), { code: "SESSION_NOT_FOUND" });
+      return {
+        sourceThreadId: sessionId,
+        threadId: "compacted-thread",
+        keptRecent: keepRecent,
+        oldMessageCount: 10,
+        newMessageCount: keepRecent + 1,
+        estimatedBefore: 1000,
+        estimatedAfter: 100,
+        reducedBy: 900,
+      };
+    }),
     resolveAgentSkills: () => ({ ok: true, skills: [] }),
     toolsMetadata: async () => [{ name: "echo" }],
     runToolByName: async (name: string, argumentsJson: string) => `tool:${name}:${argumentsJson}`,
@@ -160,7 +180,11 @@ function createService(): AgentService {
       callbacks: { onAssistantDelta?: (delta: string) => void | Promise<void> } = {},
     ) => {
       await callbacks.onAssistantDelta?.("reply");
-      return { ok: true, assistant: "reply", session: { ...session, id: input.session_id ?? session.id } };
+      return {
+        ok: true,
+        assistant: "reply",
+        session: { ...session, id: input.session_id ?? session.id },
+      };
     },
   } as unknown as AgentService;
 }
@@ -172,13 +196,14 @@ async function listen(server: AgentServerLike): Promise<string> {
     server.listen(0, "127.0.0.1", resolve);
   });
   const address = server.address?.();
-  if (!address || typeof address === "string") throw new Error("server did not expose a TCP address");
+  if (!address || typeof address === "string")
+    throw new Error("server did not expose a TCP address");
   return `http://127.0.0.1:${(address as AddressInfo).port}`;
 }
 
 async function requestJson(baseUrl: string, path: string, init?: RequestInit) {
   const response = await fetch(`${baseUrl}${path}`, init);
-  return { status: response.status, body: await response.json() as Record<string, unknown> };
+  return { status: response.status, body: (await response.json()) as Record<string, unknown> };
 }
 
 async function firstSseChunk(
@@ -210,28 +235,76 @@ async function firstSseChunk(
 }
 
 afterEach(async () => {
-  await Promise.all(servers.splice(0).map((server) => new Promise<void>((resolve) => server.close(() => resolve()))));
+  await Promise.all(
+    servers
+      .splice(0)
+      .map((server) => new Promise<void>((resolve) => server.close(() => resolve()))),
+  );
 });
 
 describe("Nest Agent host compatibility", () => {
   it("keeps existing Orbit product routes on the Nest host", async () => {
     const service = createService();
-    const nestBase = await listen(await createNestAgentHttpServer(service, { mastra: new Mastra({}) }));
+    const nestBase = await listen(
+      await createNestAgentHttpServer(service, { mastra: new Mastra({}) }),
+    );
     const cases: Array<[string, RequestInit | undefined, number]> = [
       ["/health", undefined, 200],
       ["/bridge", undefined, 200],
       ["/bridge/state", undefined, 200],
       ["/tools", undefined, 200],
+      ["/model-connections", undefined, 200],
+      [
+        "/model-connections",
+        { method: "POST", headers: { "Content-Type": "application/json" }, body: "{}" },
+        400,
+      ],
       ["/sessions", undefined, 200],
       ["/sessions/session-1", undefined, 200],
-      ["/skills/resolve", { method: "POST", headers: { "Content-Type": "application/json" }, body: "{}" }, 200],
-      ["/chat", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ session_id: "session-1", message: "hello" }) }, 200],
-      ["/tools/call", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ name: "echo", arguments_json: "{}" }) }, 200],
-      ["/workflow-runs", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ workflow: { id: "workflow-1" }, mode: "draft" }) }, 201],
+      [
+        "/skills/resolve",
+        { method: "POST", headers: { "Content-Type": "application/json" }, body: "{}" },
+        200,
+      ],
+      [
+        "/chat",
+        {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ session_id: "session-1", message: "hello" }),
+        },
+        200,
+      ],
+      [
+        "/tools/call",
+        {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ name: "echo", arguments_json: "{}" }),
+        },
+        200,
+      ],
+      [
+        "/workflow-runs",
+        {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ workflow: { id: "workflow-1" }, mode: "draft" }),
+        },
+        201,
+      ],
       ["/workflow-runs/workflow-run-1", undefined, 200],
       ["/workflow-runs/missing", undefined, 404],
       ["/workflow-runs/workflow-run-1/cancel", { method: "POST" }, 202],
-      ["/workflow-runs/workflow-run-1/resume", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ step_id: "approval", resume_data: { approved: true } }) }, 200],
+      [
+        "/workflow-runs/workflow-run-1/resume",
+        {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ step_id: "approval", resume_data: { approved: true } }),
+        },
+        200,
+      ],
       ["/missing-route", undefined, 404],
     ];
     for (const [path, init, status] of cases) {
@@ -242,12 +315,22 @@ describe("Nest Agent host compatibility", () => {
 
   it("keeps Agent and Workflow SSE framing stable and leaves Orbit routes ahead of Mastra catch-all", async () => {
     const service = createService();
-    const nestBase = await listen(await createNestAgentHttpServer(service, { mastra: new Mastra({}) }));
-    const nestEvents = await firstSseChunk(nestBase, "/events?since_id=-1", "event: session.created");
+    const nestBase = await listen(
+      await createNestAgentHttpServer(service, { mastra: new Mastra({}) }),
+    );
+    const nestEvents = await firstSseChunk(
+      nestBase,
+      "/events?since_id=-1",
+      "event: session.created",
+    );
     expect(nestEvents).toMatchObject({ status: 200 });
     expect(nestEvents.text).toContain("id: 0");
     expect(nestEvents.text).toContain("event: session.created");
-    const nestWorkflow = await firstSseChunk(nestBase, "/workflow-runs/workflow-run-1/events?since_id=0", "event: run.status");
+    const nestWorkflow = await firstSseChunk(
+      nestBase,
+      "/workflow-runs/workflow-run-1/events?since_id=0",
+      "event: run.status",
+    );
     expect(nestWorkflow).toMatchObject({ status: 200 });
     expect(nestWorkflow.text).toContain("id: 1");
     expect(nestWorkflow.text).toContain("event: run.status");
@@ -261,17 +344,61 @@ describe("Nest Agent host compatibility", () => {
 
   it("exposes Orbit ready/info, Agent run, and Memory Port routes on the Nest host", async () => {
     const service = createService();
-    const baseUrl = await listen(await createNestAgentHttpServer(service, { mastra: new Mastra({}) }));
-    await expect(requestJson(baseUrl, "/ready")).resolves.toMatchObject({ status: 200, body: { ok: true, ready: true } });
-    await expect(requestJson(baseUrl, "/info")).resolves.toMatchObject({ status: 200, body: { ok: true, name: "agent-cli" } });
-    await expect(requestJson(baseUrl, "/internal/runtime/legacy")).resolves.toMatchObject({ status: 404 });
-    await expect(requestJson(baseUrl, "/internal/runtime/legacy/drain", { method: "POST" })).resolves.toMatchObject({ status: 404 });
-    await expect(requestJson(baseUrl, "/agent-runs/agent-run-1")).resolves.toMatchObject({ status: 200, body: { ok: true } });
-    await expect(requestJson(baseUrl, "/memory/threads", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ owner_id: "owner-1", resource_id: "resource-1", id: "thread-1" }),
-    })).resolves.toMatchObject({ status: 201, body: { ok: true, thread: { id: "thread-1" } } });
+    const baseUrl = await listen(
+      await createNestAgentHttpServer(service, { mastra: new Mastra({}) }),
+    );
+    await expect(requestJson(baseUrl, "/ready")).resolves.toMatchObject({
+      status: 200,
+      body: { ok: true, ready: true },
+    });
+    await expect(requestJson(baseUrl, "/info")).resolves.toMatchObject({
+      status: 200,
+      body: { ok: true, name: "agent-cli" },
+    });
+    await expect(requestJson(baseUrl, "/internal/runtime/legacy")).resolves.toMatchObject({
+      status: 404,
+    });
+    await expect(
+      requestJson(baseUrl, "/internal/runtime/legacy/drain", { method: "POST" }),
+    ).resolves.toMatchObject({ status: 404 });
+    await expect(requestJson(baseUrl, "/agent-runs/agent-run-1")).resolves.toMatchObject({
+      status: 200,
+      body: { ok: true },
+    });
+    await expect(
+      requestJson(baseUrl, "/memory/threads", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ owner_id: "owner-1", resource_id: "resource-1", id: "thread-1" }),
+      }),
+    ).resolves.toMatchObject({ status: 201, body: { ok: true, thread: { id: "thread-1" } } });
+  });
+
+  it("通过 HTTP 委托 daemon 压缩并明确返回忙碌或不存在的会话", async () => {
+    const service = createService();
+    const baseUrl = await listen(
+      await createNestAgentHttpServer(service, { mastra: new Mastra({}) }),
+    );
+    await expect(
+      requestJson(baseUrl, "/sessions/session-1/compact", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ keepRecent: 2 }),
+      }),
+    ).resolves.toMatchObject({
+      status: 200,
+      body: { ok: true, result: { threadId: "compacted-thread", keptRecent: 2 } },
+    });
+    expect(service.compactSession).toHaveBeenCalledWith("session-1", 2);
+    await expect(
+      requestJson(baseUrl, "/sessions/missing/compact", { method: "POST" }),
+    ).resolves.toMatchObject({ status: 404 });
+    vi.mocked(service.compactSession).mockRejectedValueOnce(
+      Object.assign(new Error("busy"), { code: "SESSION_BUSY" }),
+    );
+    await expect(
+      requestJson(baseUrl, "/sessions/session-1/compact", { method: "POST" }),
+    ).resolves.toMatchObject({ status: 409, body: { error: { code: "SESSION_BUSY" } } });
   });
 
   it("closes Orbit SSE before flushing the Mastra runtime during graceful shutdown", async () => {
@@ -290,10 +417,11 @@ describe("Nest Agent host compatibility", () => {
           text += chunk;
           if (text.includes("event: session.created") && !closeDone) {
             closeDone = new Promise<void>((closeResolve, closeReject) => {
-              server.close((error) => error ? closeReject(error) : closeResolve());
+              server.close((error) => (error ? closeReject(error) : closeResolve()));
             });
           }
-          if (text.includes("event: shutdown") && text.includes("Server is shutting down")) resolve(text);
+          if (text.includes("event: shutdown") && text.includes("Server is shutting down"))
+            resolve(text);
         });
         res.once("error", reject);
       });

@@ -40,6 +40,7 @@ const version: AgentVersion = {
   name: "Review Agent",
   description: "",
   instructions: ["Review carefully."],
+  modelId: "review-model",
   toolPolicy: { allowedToolIds: ["read-file"] },
   skillPolicy: { bindings: [{
     skillId: "review-skill",
@@ -137,6 +138,8 @@ describe("mastra/workflows/agent-node-executor", () => {
       runId: expect.stringMatching(/^agent-child-/),
       agentId: "profile-1",
       agentVersion: "agent-v1",
+      modelId: "review-model",
+      skillBindings: version.skillPolicy.bindings,
       resourceId: expect.stringMatching(/^workflow-resource-/),
       sessionId: expect.stringMatching(/^workflow-agent-session-/),
       threadId: expect.stringMatching(/^workflow-agent-thread-/),
@@ -144,6 +147,7 @@ describe("mastra/workflows/agent-node-executor", () => {
       policy: { allowedToolIds: ["read-file"], allowedSkillIds: ["review-skill"] },
       messages: [
         { role: "system", content: "Review carefully." },
+        { role: "system", content: expect.stringContaining("output schema") },
         { role: "user", content: "{\"task\":\"review\"}" },
       ],
     }));

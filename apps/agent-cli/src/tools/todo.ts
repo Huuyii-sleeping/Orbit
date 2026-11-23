@@ -1,7 +1,7 @@
 import { mkdir, readFile, writeFile } from "node:fs/promises";
 import path from "node:path";
 import type { ChatCompletionTool } from "openai/resources/chat/completions";
-import { nowTimestampMs, parseTimestampMs } from "../time.js";
+import { nowTimestampMs, parseTimestampMs } from "../lib/time.js";
 
 type TodoStatus = "pending" | "in_progress" | "completed";
 

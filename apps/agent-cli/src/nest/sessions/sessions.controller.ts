@@ -3,15 +3,24 @@ import type { ServerResponse } from "node:http";
 import type { AgentService } from "../../service-api/index.js";
 import { summarizeSession } from "../../service-api/sessions.js";
 import { writeJson } from "../http.js";
-import { AGENT_SERVICE } from "../tokens.js";
+import { AGENT_SESSIONS_SERVICE } from "../tokens.js";
 
 @Controller("sessions")
 export class SessionsController {
-  constructor(@Inject(AGENT_SERVICE) private readonly service: AgentService) {}
+  constructor(
+    @Inject(AGENT_SESSIONS_SERVICE)
+    private readonly service: Pick<
+      AgentService,
+      "createSession" | "listSessions" | "getSessionDetail" | "compactSession"
+    >,
+  ) {}
 
   @Get()
   list(): Record<string, unknown> {
-    return { ok: true, sessions: this.service.listSessions().map((item) => summarizeSession(item)) };
+    return {
+      ok: true,
+      sessions: this.service.listSessions().map((item) => summarizeSession(item)),
+    };
   }
 
   @Post()
@@ -23,8 +32,33 @@ export class SessionsController {
   @Get(":sessionId")
   detail(@Param("sessionId") sessionId: string, @Res() res: ServerResponse): void {
     const session = this.service.getSessionDetail(sessionId);
-    writeJson(res, session ? 200 : 404, session
-      ? { ok: true, session }
-      : { ok: false, error: { code: "SESSION_NOT_FOUND", message: `session not found: ${sessionId}` } });
+    writeJson(
+      res,
+      session ? 200 : 404,
+      session
+        ? { ok: true, session }
+        : {
+            ok: false,
+            error: { code: "SESSION_NOT_FOUND", message: `session not found: ${sessionId}` },
+          },
+    );
+  }
+
+  @Post(":sessionId/compact")
+  async compact(
+    @Param("sessionId") sessionId: string,
+    @Body() body: { keepRecent?: number },
+    @Res() res: ServerResponse,
+  ): Promise<void> {
+    try {
+      const result = await this.service.compactSession(sessionId, body?.keepRecent);
+      writeJson(res, 200, { ok: true, result });
+    } catch (error) {
+      const code = (error as { code?: string }).code ?? "SESSION_COMPACTION_FAILED";
+      writeJson(res, code === "SESSION_BUSY" ? 409 : code === "SESSION_NOT_FOUND" ? 404 : 400, {
+        ok: false,
+        error: { code, message: error instanceof Error ? error.message : String(error) },
+      });
+    }
   }
 }

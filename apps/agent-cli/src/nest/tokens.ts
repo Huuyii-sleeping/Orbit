@@ -1,8 +1,10 @@
-/** Nest 宿主注入现有 Agent 产品服务的稳定 token。 */
-export const AGENT_SERVICE = Symbol("AGENT_SERVICE");
-
-/** Nest 宿主注入 RuntimeGateway 的稳定 token。 */
-export const RUNTIME_GATEWAY = Symbol("RUNTIME_GATEWAY");
+/** 各 HTTP 领域仅注入自己需要的宿主能力。 */
+export const AGENT_CHAT_SERVICE = Symbol("AGENT_CHAT_SERVICE");
+export const AGENT_SESSIONS_SERVICE = Symbol("AGENT_SESSIONS_SERVICE");
+export const AGENT_TOOLS_SERVICE = Symbol("AGENT_TOOLS_SERVICE");
+export const AGENT_SKILLS_SERVICE = Symbol("AGENT_SKILLS_SERVICE");
+export const AGENT_HOST_EVENTS = Symbol("AGENT_HOST_EVENTS");
+export const AGENT_RUNTIME_INFO = Symbol("AGENT_RUNTIME_INFO");
 
 /** Nest 宿主注入 AgentRuntimePort 的稳定 token。 */
 export const AGENT_RUNTIME_PORT = Symbol("AGENT_RUNTIME_PORT");

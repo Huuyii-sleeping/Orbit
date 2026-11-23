@@ -2,7 +2,7 @@ import { NestFactory } from "@nestjs/core";
 import type { Server } from "node:http";
 import "reflect-metadata";
 import { AppModule, type AppModuleOptions } from "./app.module.js";
-import { applyHeaderSetters } from "./http-utils.js";
+import { applyHeaderSetters } from "./http/http-utils.js";
 
 export type BffServerOptions = AppModuleOptions;
 

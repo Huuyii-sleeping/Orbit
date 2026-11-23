@@ -1,6 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
-vi.mock("../../../src/runtime/tool-runtime.js", () => ({
+vi.mock("../../../src/tools/tool-runtime.js", () => ({
   resolveToolExecution: vi.fn(),
 }));
 
@@ -8,10 +8,10 @@ vi.mock("../../../src/tools/registry.js", () => ({
   BUILTIN_SUBAGENT_TOOL_NAMES: new Set(["subagent_wait"]),
 }));
 
-import { resolveToolExecution, type ToolExecution } from "../../../src/runtime/tool-runtime.js";
+import { resolveToolExecution, type ToolExecution } from "../../../src/tools/tool-runtime.js";
 import type { BuiltinToolExecutorLike } from "../../../src/tools/builtin-executor.js";
 import { ToolExecutor } from "../../../src/tools/executor.js";
-import type { McpToolExecutorLike } from "../../../src/tools/mcp-executor.js";
+import type { McpToolExecutorLike } from "../../../src/tools/mcp/mcp-executor.js";
 
 function createExecution(target: ToolExecution["target"], name: string): ToolExecution {
   return {

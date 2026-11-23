@@ -1,106 +1,41 @@
-# agent-cli
+# Agent Runtime
 
-`apps/agent-cli` 是仓库当前的主 Agent 运行时与控制面，不是产品宣传页，而是给协作开发用的说明。
+本目录提供 Orbit 的 Agent 服务和 CLI/TUI/MCP/Daemon 入口。配置与完整启动步骤见[项目 README](../../README.md)。
 
-## 相关文档
+## 代码入口
 
-- [仓库通用架构术语说明](../../docs/architecture-glossary.md)
+- `src/main.ts`、`src/entrypoints/`：终端与后台服务入口。
+- `src/bootstrap/`：配置、基础服务和 Mastra 运行端口的装配；入口显式传递配置，不通过宿主反向获取依赖。
+- `src/nest/`：NestJS Host、内部 HTTP API 和 Runtime Port 装配。
+- `src/service-api/`、`src/host/`：会话、远程客户端与宿主门面；HTTP 启动入口位于 `src/entrypoints/server.ts`。
+- `src/services/chat-service.ts`：独立的聊天与会话业务，通过 Agent / Memory Port 执行；不负责模型供应商接入。
+- `src/services/tool-call-service.ts`、`agent-skill-service.ts`：HTTP 与终端共用的工具调用和技能解析；宿主门面只转发请求。
+- `src/mastra/`：共享 Mastra 实例，以及 Agent、Workflow、Memory、Tool 适配器；`models/` 薄封装 Mastra 内置模型 Gateway，不维护自定义协议 Adapter。
+- `src/tools/`：公共工具协议与执行入口；MCP、安全、子 Agent、任务、定时调度、团队、工作目录和后台任务各自成目录。
+- `src/skills/`：技能发现与加载。
+- `src/config/`、`src/models/`：环境与模型连接配置、模型预算策略。
+- `src/security/`、`src/lib/`：工作目录与数据安全、公共时间工具。
+- `src/workflows/executors/`：工作流节点执行逻辑。
+- `test/unit/`：按源码目录镜像组织单测；`test/smoke/`：跨模块和集成回归。
 
-## 它解决什么
+生产执行统一经过 `RuntimeGateway` 的四类 Port；不新增其他 Runtime，也不在适配器中维护第二套调度器或 snapshot 引擎。
 
-- 当前 Agent 已支持哪些能力
-- 新增功能时应优先沿用哪些现有模式
-- 如果要继续扩展 Agent，应该沿着什么方向演进
+`AgentHost` 仅管理会话存储与事件，不保存模型客户端或应用服务容器。Nest 各领域模块显式导入运行依赖，不依赖全局注入；模型 SDK 客户端不属于启动配置。
 
-## 使用场景
+## 常用命令
 
-- 在 CLI 中驱动 Agent 完成页面、接口、状态管理、调试和发布前检查
-- 给 Web Console 或其他前端增加只读或可观测能力
-- 把复杂需求拆成任务、子代理、后台任务或隔离工作目录并行推进
-- 继续给 Agent 增加工具、流程、守卫和恢复能力
-
-## 快速启动
-
-1. 安装依赖
-
-```bash
-pnpm install
-```
-
-2. 配置 `apps/agent-cli/.env`
+在仓库根目录执行：
 
 ```bash
-MODEL_ID=your-model-id
-OPENAI_API_KEY=your-api-key
-OPENAI_BASE_URL=your-base-url
+pnpm dev:agent
+pnpm --filter agent-cli dev:server
+pnpm --filter agent-cli dev:tui-ink
+pnpm --filter agent-cli test
+pnpm --filter agent-cli test:workflow
+pnpm --filter agent-cli test:harness
+pnpm --filter agent-cli test:models
 ```
 
-3. 启动 CLI
+MCP 传输与工具转换使用 `@mastra/mcp`，产品信任、审批与并发规则留在 `src/tools/mcp/`。
 
-```bash
-pnpm --filter agent-cli dev
-```
-
-4. 构建并运行
-
-```bash
-pnpm --filter agent-cli build
-pnpm --filter agent-cli start
-```
-
-5. 启动 Web Console
-
-```bash
-pnpm --filter agent-web-console dev
-```
-
-## 开发原则
-
-- 先把需求落到任务，再开始实现
-- 能复用现有工具就不要额外发明流程
-- 风险高、耗时长、并行性强的工作优先考虑 `task_*`、`worktree_*`、`subagent_*`、`background_*`
-- 对可重复的信息，优先写入 `memory_*`
-- 所有会影响可恢复性和可观测性的改动，都要考虑 `.observability`、`.security`、`.schedule`、`.tasks`
-- 新增能力时，优先沿用现有模式：`tool definition + handler + persistence + notification + tests`
-
-## 当前能力总览
-
-- CLI 主循环：`src/main.ts`、`src/cli/index.ts`
-- Prompt 构建与恢复：`src/agent-loop.ts`
-- 文件与命令工具：`bash`、`read_file`、`write_file`、`edit_file`
-- 任务与进度：`todo`、`task_create`、`task_update`、`task_list`、`task_get`
-- 记忆：`memory_add`、`memory_search`、`memory_list`
-- 上下文压缩：`estimate_tokens`、`compact`
-- 定时调度：`schedule_create`、`schedule_list`、`schedule_remove`
-- 后台任务：`background_run`、`check_background`
-- 子代理：`subagent_spawn`、`subagent_send`、`subagent_wait`、`subagent_list`、`subagent_close`
-- 团队通信：`team_*`
-- 安全审批：`security_*`
-- 工作目录隔离：`worktree_*`
-- 观测与回放：`.observability`、`replay:trace`
-- Hooks：`.codex/hooks.json`
-- MCP：`src/entrypoints/mcp-server.ts`、`src/tools/mcp-*.ts`
-- Daemon 控制面：`src/entrypoints/daemon.ts`、`src/entrypoints/daemon-status.ts`、`src/entrypoints/daemon-stop.ts`、`src/host/agent-host.ts`
-- Bridge 控制面：`src/service-api/bridge.ts`、`GET /bridge/state`、支持 `since_id` / `Last-Event-ID` replay 的 `GET /events`
-- Host 事件语义：共享同一 `AgentHost` 的多个入口复用同一条宿主级事件流，而不是各自维护独立 event bus
-- Interactive CLI 复用语义：默认 `agent-cli` 在本地 daemon 已运行且 HTTP service ready 时优先 attach 到共享宿主；不可复用时回退 embedded CLI
-- TUI 复用语义：`agent-cli tui` 在本地 daemon 已运行且 HTTP service ready 时优先 attach 到共享宿主；不可复用时回退 embedded host
-- MCP 复用语义：`agent-cli mcp-server` 在本地 daemon 已运行且 HTTP service ready 时优先 attach 到共享宿主；不可复用时回退 embedded host
-- Daemon 生命周期语义：daemon 锁会跟随后台进程存活期保持持有，`agent-cli daemon stop` 会通过本机 PID 信号触发优雅关闭
-- Daemon 状态语义：`agent-cli daemon status` 不只读取 lock，还会继续探测共享 service readiness，避免“进程活着但不可复用”被误判成健康运行
-- Daemon 验证链路：`pnpm --filter agent-cli test:daemon` 会跑一条真实的 `start -> status -> bridge/state -> event replay -> attach -> stop` smoke
-
-## 继续扩展时的顺序
-
-1. 在 `src/tools/*.ts` 中定义工具和 handler
-2. 在 `src/tools/base.ts` 或 `src/tools/index.ts` 注册
-3. 如果有状态，明确持久化目录和 schema
-4. 如果结果需要异步回流，提供 notification 机制
-5. 在 `agent-loop.ts` 中决定是否注入 system message
-6. 补测试
-7. 更新本文档
-
-## 阅读约定
-
-- 这个 README 只负责仓库内 agent-cli 的协作说明
-- 架构术语、名词边界和概念定义，请优先看 [仓库通用架构术语说明](../../docs/architecture-glossary.md)
+模型连接配置见 `src/config/model-config.ts`，运行策略见 `src/config/runtime-config.ts`。开发规则统一读取根目录 [AGENTS.md](../../AGENTS.md)。

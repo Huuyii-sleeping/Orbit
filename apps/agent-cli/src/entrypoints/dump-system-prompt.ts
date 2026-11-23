@@ -1,5 +1,5 @@
 import * as process from "node:process";
-import { getStaticPromptSource } from "../config.js";
+import { getStaticPromptSource } from "../config/config.js";
 import { renderCliPromptDump } from "../cli/ui.js";
 import { inspectPromptSource } from "../prompt/inspect.js";
 import { getSkillCatalog } from "../skills/loader.js";

@@ -1,17 +1,15 @@
 import path from "node:path";
-import { createInterface } from "node:readline/promises";
 import { stdin, stdout } from "node:process";
-import type OpenAI from "openai";
-import { createAgentAppRuntime, type AgentAppRuntimeDeps } from "../bootstrap/app-runtime.js";
-import { AgentHost } from "../host/agent-host.js";
-import { createMastraAgentService } from "../runtime/mastra-default-service.js";
-import { getStaticPromptSource } from "../config.js";
+import { createInterface } from "node:readline/promises";
+import { type AgentAppRuntimeDeps } from "../bootstrap/app-runtime.js";
+import { createEmbeddedAgent } from "../bootstrap/embedded-agent.js";
+import type { RuntimeCoordinationServiceLike } from "../services/index.js";
+import { completeCliLine } from "./completion.js";
 import {
   resolveDaemonCliService,
   type DaemonCliServiceResolution,
   type InteractiveCliServiceLike,
 } from "./service-adapter.js";
-import { completeCliLine } from "./completion.js";
 import {
   listCliHelpTopics,
   renderCliBanner,
@@ -23,7 +21,6 @@ import {
   renderCliSessions,
   renderCliTools,
 } from "./ui.js";
-import type { RuntimeCoordinationServiceLike } from "../services/index.js";
 
 type LineEditor = {
   line: string;
@@ -57,7 +54,9 @@ function formatError(error: unknown): string {
 }
 
 function isReadlineClosedError(error: unknown): boolean {
-  return Boolean(error && typeof error === "object" && "code" in error && error.code === "ERR_USE_AFTER_CLOSE");
+  return Boolean(
+    error && typeof error === "object" && "code" in error && error.code === "ERR_USE_AFTER_CLOSE",
+  );
 }
 
 export function renderAsyncCliEvent(opts: {
@@ -110,7 +109,8 @@ export async function runScheduledRound(opts: ScheduledRoundOptions): Promise<bo
       const assistant = String(result.assistant ?? "").trim();
       opts.printAsyncEvent(
         "scheduled",
-        assistant || "Scheduled prompt processed without a text reply. Check tool output and side effects above.",
+        assistant ||
+          "Scheduled prompt processed without a text reply. Check tool output and side effects above.",
       );
       return true;
     } catch (error) {
@@ -141,27 +141,32 @@ async function runServiceCli(opts: {
   notice: string | null;
 }): Promise<void> {
   let activeSessionId = opts.service.listSessions().at(-1)?.id ?? null;
-  const model = opts.notice?.startsWith("Connected to daemon") ? "daemon-host" : process.env.MODEL_ID?.trim() || "unset-model";
-  const renderBanner = () => renderCliBanner({
-    title: "Agent CLI",
-    workspace: path.basename(process.cwd()),
-    mode: "interactive/agent",
-    model,
-    sessionId: activeSessionId,
-    commands: ["/help", "/sessions", "/new", "/tools", "/exit"],
-  });
+  const model = opts.notice?.startsWith("Connected to daemon")
+    ? "daemon-host"
+    : process.env.MODEL_ID?.trim() || "unset-model";
+  const renderBanner = () =>
+    renderCliBanner({
+      title: "Agent CLI",
+      workspace: path.basename(process.cwd()),
+      mode: "interactive/agent",
+      model,
+      sessionId: activeSessionId,
+      commands: ["/help", "/sessions", "/new", "/tools", "/exit"],
+    });
   const rl = createInterface({
     input: opts.input,
     output: opts.output,
-    completer: (line) => completeCliLine(line, {
-      sessions: sessionSummaries(opts.service, activeSessionId),
-      helpTopics: listCliHelpTopics(),
-      transcriptEntryCount: activeSessionId
-        ? opts.service.listSessions().find((session) => session.id === activeSessionId)?.history.length ?? 0
-        : 0,
-      paletteEntryCount: 0,
-      model,
-    }),
+    completer: (line) =>
+      completeCliLine(line, {
+        sessions: sessionSummaries(opts.service, activeSessionId),
+        helpTopics: listCliHelpTopics(),
+        transcriptEntryCount: activeSessionId
+          ? (opts.service.listSessions().find((session) => session.id === activeSessionId)?.history
+              .length ?? 0)
+          : 0,
+        paletteEntryCount: 0,
+        model,
+      }),
   });
   opts.output.write(`${renderBanner()}\n`);
   if (opts.notice) opts.output.write(`${opts.notice}\n\n`);
@@ -169,15 +174,24 @@ async function runServiceCli(opts: {
     while (true) {
       let query: string;
       try {
-        query = await rl.question(renderCliPrompt(activeSessionId, { active: false, lineCount: 0, charCount: 0 }, "agent"));
+        query = await rl.question(
+          renderCliPrompt(activeSessionId, { active: false, lineCount: 0, charCount: 0 }, "agent"),
+        );
       } catch (error) {
         if (isReadlineClosedError(error)) break;
         throw error;
       }
       const normalized = query.trim();
       if (!normalized) continue;
-      if (normalized === "exit" || normalized === "q" || normalized === "/exit" || normalized === "/quit") {
-        opts.output.write(`${renderCliCloseout({ sessionId: activeSessionId, changedPaths: [] })}\n`);
+      if (
+        normalized === "exit" ||
+        normalized === "q" ||
+        normalized === "/exit" ||
+        normalized === "/quit"
+      ) {
+        opts.output.write(
+          `${renderCliCloseout({ sessionId: activeSessionId, changedPaths: [] })}\n`,
+        );
         break;
       }
       if (normalized === "/help") {
@@ -185,7 +199,9 @@ async function runServiceCli(opts: {
         continue;
       }
       if (normalized === "/sessions") {
-        opts.output.write(`${renderCliSessions(sessionSummaries(opts.service, activeSessionId))}\n\n`);
+        opts.output.write(
+          `${renderCliSessions(sessionSummaries(opts.service, activeSessionId))}\n\n`,
+        );
         continue;
       }
       if (normalized === "/new") {
@@ -211,7 +227,9 @@ async function runServiceCli(opts: {
       const result = await opts.service.chat({ session_id: activeSessionId, message: query });
       if (result.ok === false) {
         const error = result.error as { message?: unknown } | undefined;
-        opts.output.write(`${renderCliError("chat failed", String(error?.message ?? "chat failed"))}\n\n`);
+        opts.output.write(
+          `${renderCliError("chat failed", String(error?.message ?? "chat failed"))}\n\n`,
+        );
         continue;
       }
       const session = result.session as { id?: unknown } | undefined;
@@ -225,7 +243,13 @@ async function runServiceCli(opts: {
 }
 
 export async function runCli(options: RunCliOptions = {}): Promise<void> {
-  const { input = stdin, output = stdout, service, resolveDaemonService, ...runtimeOverrides } = options;
+  const {
+    input = stdin,
+    output = stdout,
+    service,
+    resolveDaemonService,
+    ...runtimeOverrides
+  } = options;
   let selected = service ?? null;
   let notice: string | null = null;
   if (!selected) {
@@ -242,21 +266,9 @@ export async function runCli(options: RunCliOptions = {}): Promise<void> {
     }
   }
   if (!selected) {
-    let app: AgentAppRuntimeDeps;
-    try {
-      app = createAgentAppRuntime(runtimeOverrides);
-    } catch (error) {
-      if (!(error instanceof Error) || !error.message.includes("Missing environment variable: MODEL_ID")) throw error;
-      app = createAgentAppRuntime({
-        ...runtimeOverrides,
-        client: runtimeOverrides.client ?? ({} as OpenAI),
-        model: runtimeOverrides.model ?? "unset-model",
-        promptSource: runtimeOverrides.promptSource ?? getStaticPromptSource(),
-      });
-    }
-    const host = new AgentHost(app);
-    await host.initialize();
-    selected = await createMastraAgentService(app, host);
+    selected = (
+      await createEmbeddedAgent({ overrides: runtimeOverrides, allowUnconfiguredModel: true })
+    ).service;
   }
   await runServiceCli({ service: selected, input, output, notice });
 }

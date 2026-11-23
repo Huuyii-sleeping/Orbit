@@ -1,10 +1,10 @@
-import type { ChatCompletionMessageParam } from "openai/resources/chat/completions";
+import type { AgentInputMessage } from "@orbit/runtime-contracts";
 import { resolveRunningDaemonServiceClient } from "../service-api/daemon-client.js";
 
 export type InteractiveCliSessionLike = {
   id: string;
   busy: boolean;
-  history: ChatCompletionMessageParam[];
+  history: AgentInputMessage[];
   messageCount?: number;
 };
 

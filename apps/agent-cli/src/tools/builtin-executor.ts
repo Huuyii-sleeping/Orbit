@@ -4,7 +4,7 @@ import {
   executeProtectedToolHandler,
   validateToolInput,
   type ToolExecution,
-} from "../runtime/tool-runtime.js";
+} from "./tool-runtime.js";
 import { BASE_UNKNOWN_TOOL } from "./base.js";
 import { previewBuiltinToolCall, resolveBuiltinToolHandler, resolveBuiltinToolRegistration } from "./registry.js";
 

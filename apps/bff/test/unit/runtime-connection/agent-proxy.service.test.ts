@@ -1,6 +1,6 @@
 import { createServer, type Server } from "node:http";
 import { once } from "node:events";
-import { afterEach, describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import { AgentProxyService } from "../../../src/agent-proxy.service.js";
 
 const servers: Server[] = [];
@@ -24,6 +24,23 @@ async function hangingServer(sendHeaders: boolean) {
 }
 
 describe("Agent 上游超时边界", () => {
+  it("JSON 和 Workflow SSE 使用服务凭据并禁止重定向", async () => {
+    const token = "test-agent-service-token-0123456789abcdef";
+    const fetchImpl = vi.fn<typeof fetch>(async () => new Response('{"ok":true}'));
+    const service = new AgentProxyService({ agentBaseUrl: "http://127.0.0.1:3181", agentServiceToken: token, fetchImpl });
+    await service.sendMessage("session", { message: "hello" });
+    await service.workflowEventStream("run", "?since_id=7", "7", new AbortController().signal);
+    const jsonInit = fetchImpl.mock.calls[0]![1]!;
+    expect(new Headers(jsonInit.headers).get("authorization")).toBe(`Bearer ${token}`);
+    expect(new Headers(jsonInit.headers).get("content-type")).toBe("application/json");
+    expect(jsonInit.redirect).toBe("error");
+    const streamInit = fetchImpl.mock.calls[1]![1]!;
+    expect(new Headers(streamInit.headers).get("authorization")).toBe(`Bearer ${token}`);
+    expect(new Headers(streamInit.headers).get("last-event-id")).toBe("7");
+    expect(new Headers(streamInit.headers).get("accept")).toBe("text/event-stream");
+    expect(streamInit.redirect).toBe("error");
+  });
+
   it.each([false, true])("请求或响应体挂起能在期限内中断（已发头：%s）", async (sendHeaders) => {
     const service = new AgentProxyService({ agentBaseUrl: await hangingServer(sendHeaders), requestTimeoutMs: 80 });
     const started = Date.now();

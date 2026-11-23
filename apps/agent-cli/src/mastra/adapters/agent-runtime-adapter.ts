@@ -13,7 +13,7 @@ import {
   type StreamAgentCommand,
   type RuntimeBinding,
 } from "@orbit/runtime-contracts";
-import { AsyncEventQueue } from "../../runtime/async-event-queue.js";
+import { AsyncEventQueue } from "./async-event-queue.js";
 import {
   type MastraAgentExecutionResolver,
   type MastraAgentExecutor,
@@ -302,22 +302,27 @@ export class MastraAgentRuntimeAdapter implements AgentRuntimePort {
         runId: prepared.nativeRunId,
         abortSignal: prepared.abortController.signal,
       });
+      // Memory 开启时流错误也会拒绝这三个 promise；立即接管，避免等待 fullStream 期间杀死进程。
+      const completion = Promise.allSettled([
+        streamOutput.text,
+        streamOutput.finishReason,
+        streamOutput.totalUsage,
+      ]);
       if (streamOutput.runId !== prepared.nativeRunId) {
         throw new Error(`Mastra runId 不一致：expected ${prepared.nativeRunId}, received ${streamOutput.runId}`);
       }
       for await (const chunk of streamOutput.fullStream) {
         for (const event of eventMapper.map(chunk)) await this.journal.appendAgent(runId, event);
       }
-      const [text, finishReason, usage] = await Promise.all([
-        streamOutput.text,
-        streamOutput.finishReason,
-        streamOutput.totalUsage,
-      ]);
+      const [text, finishReason, usage] = await completion;
+      if (text.status === "rejected") throw text.reason;
+      if (finishReason.status === "rejected") throw finishReason.reason;
+      if (usage.status === "rejected") throw usage.reason;
       const active = this.active.get(runId);
       const result = this.result(runId, command, prepared, {
-        text,
-        finishReason,
-        usage,
+        text: text.value,
+        finishReason: finishReason.value,
+        usage: usage.value,
         toolExecutions: eventMapper.toolExecutions(),
         error: streamOutput.error,
         tripwire: streamOutput.tripwire,

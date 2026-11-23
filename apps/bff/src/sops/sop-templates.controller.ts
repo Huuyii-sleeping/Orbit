@@ -1,6 +1,6 @@
 import { Body, Controller, Delete, Get, Inject, Param, Post, Put, Query, Res } from "@nestjs/common";
 import type { ServerResponse } from "node:http";
-import { errorPayload, writeJson } from "../http-utils.js";
+import { errorPayload, writeJson } from "../http/http-utils.js";
 import { SopDomainError, SopValidationError } from "./sops.errors.js";
 import { SopsService } from "./sops.service.js";
 import type { SaveSopTemplateInput } from "./sops.types.js";

@@ -1,5 +1,5 @@
 import { ArrowLeft } from "lucide-react";
-import type { AgentProfile } from "../../../api";
+import type { AgentProfile } from "../../../api/index";
 import { agentSkillName } from "../../agents/lib/agent-profile";
 
 export function AgentTestBanner({ agent, onBack }: { agent: AgentProfile | null; onBack: () => void }) {

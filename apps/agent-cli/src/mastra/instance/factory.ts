@@ -3,7 +3,7 @@ import { Mastra } from "@mastra/core/mastra";
 import { ConsoleLogger, LogLevel } from "@mastra/core/logger";
 import { NoOpObservability } from "@mastra/core/observability";
 import { LibSQLStore } from "@mastra/libsql";
-import { isLocalPersistenceEnabled } from "../../runtime-config.js";
+import { isLocalPersistenceEnabled } from "../../config/runtime-config.js";
 import { MASTRA_AGENT_REGISTRY } from "../agents/index.js";
 import { createOrbitMastraMemory, ORBIT_MASTRA_MEMORY_KEY } from "../memory/index.js";
 import { ensureMastraRuntimePaths, resolveMastraRuntimePaths, type MastraRuntimePaths } from "../storage/paths.js";

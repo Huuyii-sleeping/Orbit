@@ -1,7 +1,7 @@
 import ReactMarkdown, { type Components } from "react-markdown";
 import rehypeHighlight from "rehype-highlight";
 import remarkGfm from "remark-gfm";
-import type { ChatMessage } from "../../../api";
+import type { ChatMessage } from "../../../api/index";
 import { messageText } from "../lib/chat-format";
 
 const markdownComponents: Components = {

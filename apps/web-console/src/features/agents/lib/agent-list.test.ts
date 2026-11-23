@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { selectAgentRows } from "./agent-list";
-import { defaultAgentProfileInput, type AgentProfile } from "../../../api";
+import { defaultAgentProfileInput, type AgentProfile } from "../../../api/index";
 
 const agents: AgentProfile[] = [
   { ...defaultAgentProfileInput, id: "research", name: "行业研究", description: "交叉检查资料", scenario: "研究", createdAt: 1, updatedAt: 10, skills: [{ skillId: "web-search", version: "1", sourceType: "builtin", registrySource: "local" }] },

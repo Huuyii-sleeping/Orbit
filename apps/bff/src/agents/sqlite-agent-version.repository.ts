@@ -1,7 +1,7 @@
 import { Inject, Injectable } from "@nestjs/common";
 import type { AgentVersion } from "@orbit/workflow-core";
 import { randomUUID } from "node:crypto";
-import { SopDatabase } from "../sops/sop-database.js";
+import { SopDatabase } from "../storage/sop-database.js";
 import { SopStorageError } from "../sops/sops.errors.js";
 import type { AgentVersionRepository, PublishAgentVersionRecord } from "./agent-version.repository.js";
 

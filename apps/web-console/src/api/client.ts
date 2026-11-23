@@ -23,7 +23,9 @@ export class ApiRequestError extends AppError {
 export type JsonObject = Record<string, unknown>;
 
 /** 可关闭并订阅事件的 SSE 连接。 */
-type EventSourceLike = Pick<EventSource, "addEventListener" | "close"> & {
+type EventSourceLike = {
+  addEventListener(type: string, listener: (event: MessageEvent<string>) => void): void;
+  close(): void;
   onopen: ((event: Event) => void) | null;
   onerror: ((event: Event) => void) | null;
 };

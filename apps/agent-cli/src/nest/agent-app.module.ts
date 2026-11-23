@@ -15,6 +15,7 @@ import { SkillsModule } from "./skills/skills.module.js";
 import { ToolExecutionModule } from "./tool/tool.module.js";
 import { MASTRA_RUNTIME_CLEANUP } from "./tokens.js";
 import { WorkflowRuntimeModule } from "./workflow/workflow.module.js";
+import { ModelsModule } from "./models/models.module.js";
 
 export type AgentAppModuleOptions = {
   service: AgentService;
@@ -26,20 +27,22 @@ export type AgentAppModuleOptions = {
 export class AgentAppModule {
   /** 构建单一 Agent Service；MastraModule 必须保持为最后一个 import。 */
   static register(options: AgentAppModuleOptions): DynamicModule {
+    const runtime = RuntimeGatewayModule.register(options.service);
     return {
       module: AgentAppModule,
       imports: [
-        RuntimeGatewayModule.register(options.service),
-        AgentRuntimeModule,
-        WorkflowRuntimeModule,
-        ToolExecutionModule,
-        MemoryRuntimeModule,
-        SessionsModule,
-        SkillsModule,
+        runtime,
+        AgentRuntimeModule.register(runtime),
+        WorkflowRuntimeModule.register(runtime),
+        ToolExecutionModule.register(runtime),
+        MemoryRuntimeModule.register(runtime),
+        SessionsModule.register(runtime),
+        SkillsModule.register(runtime),
         SecurityModule,
         AuditModule,
-        EventsHealthModule,
-        McpModule,
+        ModelsModule,
+        EventsHealthModule.register(runtime),
+        McpModule.register(runtime),
         MastraModule.register({
           mastra: options.mastra,
           prefix: "/internal/mastra",

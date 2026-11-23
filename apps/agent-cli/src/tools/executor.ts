@@ -1,4 +1,4 @@
-import { resolveToolExecution } from "../runtime/tool-runtime.js";
+import { resolveToolExecution } from "./tool-runtime.js";
 import {
   DEFAULT_BUILTIN_TOOL_EXECUTOR,
   type BuiltinToolExecutorLike,
@@ -6,7 +6,7 @@ import {
 import {
   DEFAULT_MCP_TOOL_EXECUTOR,
   type McpToolExecutorLike,
-} from "./mcp-executor.js";
+} from "./mcp/mcp-executor.js";
 import {
   BUILTIN_SUBAGENT_TOOL_NAMES,
 } from "./registry.js";

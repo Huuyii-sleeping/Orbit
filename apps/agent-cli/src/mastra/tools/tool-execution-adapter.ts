@@ -1,5 +1,5 @@
 import type { AgentExecutionContext, ExecuteToolCommand, ToolDescriptor, ToolExecutionPort, ToolExecutionResult, ToolListContext } from "@orbit/runtime-contracts";
-import { createTool, type Tool } from "@mastra/core/tools";
+import { createTool, noopObserve, type Tool } from "@mastra/core/tools";
 import type { ToolsInput } from "@mastra/core/agent";
 import type { PublicSchema } from "@mastra/core/schema";
 import { RequestContext } from "@mastra/core/request-context";
@@ -120,10 +120,7 @@ export class MastraToolExecutionAdapter implements ToolExecutionPort {
     return tool.execute(input.toolInput, {
       requestContext,
       abortSignal: input.abortSignal,
-      observe: {
-        span: async (_name, action) => action(),
-        log: () => undefined,
-      },
+      observe: noopObserve,
     });
   }
 

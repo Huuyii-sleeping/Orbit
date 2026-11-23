@@ -8,7 +8,7 @@ import {
   type WorkflowStageECapabilityRegistry,
 } from "@orbit/workflow-core";
 import { SqliteAgentVersionRepository } from "../../../src/agents/sqlite-agent-version.repository.js";
-import { SopDatabase } from "../../../src/sops/sop-database.js";
+import { SopDatabase } from "../../../src/storage/sop-database.js";
 import { SopRevisionConflictError, SopValidationError } from "../../../src/sops/sops.errors.js";
 import { SopsService } from "../../../src/sops/sops.service.js";
 import { SqliteSopsRepository } from "../../../src/sops/sqlite-sops.repository.js";

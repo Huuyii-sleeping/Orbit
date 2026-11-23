@@ -515,22 +515,8 @@ function resolveBuiltinBinding(binding: AgentSkillBinding, options: SkillLoaderO
       ],
     };
   }
-  const version = metadataValueToString(getMetadataValue(skill.metadata, "version")) ?? "";
-  if (binding.version && version !== binding.version) {
-    return {
-      ok: false,
-      issues: [
-        {
-          skillId: binding.skillId,
-          version: binding.version,
-          sourceType: binding.sourceType,
-          code: "SKILL_VERSION_MISMATCH",
-          message: `builtin skill ${binding.skillId} is ${version || "(unknown)"}, not ${binding.version}`,
-        },
-      ],
-    };
-  }
-  return { ok: true, skills: [skill] };
+  // 内置技能和 Skill Hub 使用相同的包版本规则：skill.json 优先，兼容 frontmatter。
+  return toBoundSkillDefinition(binding, skill.path, skill.root, options.cwd ?? process.cwd());
 }
 
 export function resolveBoundSkills(

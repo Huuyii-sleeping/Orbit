@@ -1,6 +1,6 @@
 import { spawn } from "node:child_process";
 import * as process from "node:process";
-import { RUNTIME_CONFIG } from "../runtime-config.js";
+import { RUNTIME_CONFIG } from "../config/runtime-config.js";
 import type { CommandHookDefinition, HookDecision, HookInvocation } from "./types.js";
 
 function parseDecision(raw: string): HookDecision {

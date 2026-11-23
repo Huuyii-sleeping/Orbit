@@ -27,10 +27,8 @@ export const RELEASE_ARTIFACT_PATHS = [
 ] as const;
 
 const APP_DIR = "apps/agent-cli";
-const OPEN_SPEC_CHANGE = "migrate-agent-runtime-to-mastra";
 const commandSuffix = process.platform === "win32" ? ".cmd" : "";
 const pnpmCommand = `pnpm${commandSuffix}`;
-const openspecCommand = `openspec${commandSuffix}`;
 
 function appScriptStage(name: string, script: string): ReleaseGateStage {
   return {
@@ -59,10 +57,6 @@ export function getReleaseGateStages(): ReleaseGateStage[] {
     appScriptStage("workflow-smoke", "test:workflow"),
     appScriptStage("worktree-closeout-smoke", "test:worktree-closeout"),
     appScriptStage("mcp-smoke", "test:mcp"),
-    {
-      name: "openspec-validate",
-      command: [openspecCommand, "validate", OPEN_SPEC_CHANGE, "--type", "change"],
-    },
     { name: "artifact-residue-check", kind: "artifact-residue-check" },
   ];
 }

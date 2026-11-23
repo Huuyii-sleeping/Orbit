@@ -1,11 +1,11 @@
 import { Module, type DynamicModule } from "@nestjs/common";
 import type { WorkflowStageECapabilityRegistry } from "@orbit/workflow-core";
-import { SqliteAgentVersionRepository } from "../agents/sqlite-agent-version.repository.js";
-import { SopDatabase, type SopDatabaseOptions } from "./sop-database.js";
+import type { SopDatabaseOptions } from "../storage/sop-database.js";
 import { SopTemplatesController } from "./sop-templates.controller.js";
 import { SopsController } from "./sops.controller.js";
 import { SopsService } from "./sops.service.js";
 import { SqliteSopsRepository } from "./sqlite-sops.repository.js";
+import { SOPS_REPOSITORY } from "./sops.repository.js";
 import {
   resolveWorkflowStageECapabilities,
   WORKFLOW_STAGE_E_CAPABILITY_REGISTRY,
@@ -20,23 +20,22 @@ export type SopsModuleOptions = SopDatabaseOptions & {
 export class SopsModule {
   static register(
     options: SopsModuleOptions,
-    database = new SopDatabase(options),
-    agentVersions = new SqliteAgentVersionRepository(database),
+    database: DynamicModule,
+    agentVersions: DynamicModule,
   ): DynamicModule {
     return {
       module: SopsModule,
+      imports: [database, agentVersions],
       controllers: [SopsController, SopTemplatesController],
       providers: [
-        { provide: SopDatabase, useValue: database },
-        { provide: SqliteAgentVersionRepository, useValue: agentVersions },
         {
           provide: WORKFLOW_STAGE_E_CAPABILITY_REGISTRY,
           useValue: resolveWorkflowStageECapabilities(options.workflowStageECapabilities),
         },
-        SqliteSopsRepository,
+        { provide: SOPS_REPOSITORY, useClass: SqliteSopsRepository },
         SopsService,
       ],
-      exports: [SopsService, SopDatabase],
+      exports: [SopsService, SOPS_REPOSITORY],
     };
   }
 }

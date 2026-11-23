@@ -1,7 +1,7 @@
 import { Inject, Injectable } from "@nestjs/common";
 import { isWorkflowDraft, normalizeWorkflowDraft, type WorkflowDraft, type WorkflowVersion } from "@orbit/workflow-core";
 import { randomUUID } from "node:crypto";
-import { SopDatabase } from "./sop-database.js";
+import { SopDatabase } from "../storage/sop-database.js";
 import { SopNotFoundError, SopRevisionConflictError, SopStorageError } from "./sops.errors.js";
 import type { PublishVersionRecord, SopsRepository } from "./sops.repository.js";
 import type { SopTemplate, SopVersionSummary } from "./sops.types.js";

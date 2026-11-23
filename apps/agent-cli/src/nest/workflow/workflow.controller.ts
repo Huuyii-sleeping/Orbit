@@ -45,6 +45,8 @@ export class WorkflowController {
   async start(@Body() input: StartWorkflowRequest, @Res() res: ServerResponse): Promise<void> {
     try {
       const run = await this.runtime.start({
+        // 本地单用户宿主与聊天 Memory 使用相同归属；不接受请求体伪造 owner。
+        requestContext: { ownerId: "local-owner" },
         workflow: input.workflow as StartWorkflowRunCommand["workflow"],
         workflowDependencies: input.workflow_dependencies as StartWorkflowRunCommand["workflowDependencies"],
         agentDependencies: input.agent_dependencies as StartWorkflowRunCommand["agentDependencies"],

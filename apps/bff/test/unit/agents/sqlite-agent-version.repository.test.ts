@@ -3,7 +3,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
 import type { AgentVersion } from "@orbit/workflow-core";
-import { SopDatabase } from "../../../src/sops/sop-database.js";
+import { SopDatabase } from "../../../src/storage/sop-database.js";
 import { SqliteAgentVersionRepository } from "../../../src/agents/sqlite-agent-version.repository.js";
 
 const roots: string[] = [];

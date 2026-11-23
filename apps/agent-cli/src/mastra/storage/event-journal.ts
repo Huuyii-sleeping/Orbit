@@ -6,7 +6,7 @@ import type {
   RuntimeEventBase,
   WorkflowRuntimeEvent,
 } from "@orbit/runtime-contracts";
-import { isLocalPersistenceEnabled } from "../../runtime-config.js";
+import { isLocalPersistenceEnabled } from "../../config/runtime-config.js";
 import { resolveMastraRuntimePaths } from "./paths.js";
 
 type EventWithoutEnvelope<T> = T extends RuntimeEventBase ? Omit<T, keyof RuntimeEventBase> : never;

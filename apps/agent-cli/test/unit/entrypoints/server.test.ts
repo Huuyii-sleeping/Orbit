@@ -1,13 +1,17 @@
+import { AgentHost } from "../../../src/host/agent-host.js";
 import { describe, expect, it, vi } from "vitest";
 import { AgentService } from "../../../src/service-api/index.js";
-import { runServer } from "../../../src/service-api/server.js";
+import { runServer } from "../../../src/entrypoints/server.js";
+import * as config from "../../../src/config/config.js";
 
 describe("entrypoints/server", () => {
   it("initializes the provided host before listening", async () => {
-    const host = {
-      initialize: vi.fn(async () => undefined),
-      runtime: vi.fn(() => ({})),
-    };
+    const ensureModel = vi.spyOn(config, "ensureModelConfigured").mockImplementation(() => {
+      throw new Error("Missing environment variable: MODEL_ID");
+    });
+    const defaultModel = vi.spyOn(config, "getDefaultModel").mockReturnValue("unset-model");
+    const host = new AgentHost();
+    vi.spyOn(host, "initialize").mockResolvedValue(undefined);
     const listen = vi.fn((port: number, bind: string, callback: () => void) => {
       callback();
       return undefined;
@@ -21,10 +25,7 @@ describe("entrypoints/server", () => {
     };
 
     await runServer({
-      host: host as {
-        initialize(): Promise<void>;
-        runtime(): unknown;
-      },
+      host,
       port: 4318,
       output: output as unknown as NodeJS.WritableStream,
       serverFactory: (service) => {
@@ -49,5 +50,8 @@ describe("entrypoints/server", () => {
     expect(host.initialize).toHaveBeenCalledTimes(1);
     expect(listen).toHaveBeenCalledWith(4318, "0.0.0.0", expect.any(Function));
     expect(output.chunks.join("")).toContain("http://0.0.0.0:4318");
+    expect(ensureModel).not.toHaveBeenCalled();
+    ensureModel.mockRestore();
+    defaultModel.mockRestore();
   });
 });

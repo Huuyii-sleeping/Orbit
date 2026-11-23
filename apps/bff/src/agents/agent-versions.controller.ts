@@ -1,6 +1,6 @@
 import { Controller, Get, Inject, Param, Query, Res } from "@nestjs/common";
 import type { ServerResponse } from "node:http";
-import { errorPayload, writeJson } from "../http-utils.js";
+import { errorPayload, writeJson } from "../http/http-utils.js";
 import { AgentVersionNotFoundError, AgentVersionService } from "./agent-version.service.js";
 
 /** AgentVersion 只读 catalog/detail REST 入口。 */

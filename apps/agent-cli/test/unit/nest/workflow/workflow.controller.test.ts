@@ -116,4 +116,13 @@ describe("WorkflowController", () => {
       error: { code: "WORKFLOW_RUN_RESUME_CONFLICT", message: "run is terminal" },
     });
   });
+  it("为本地运行注入服务端归属，忽略客户端伪造的上下文", async () => {
+    const start = vi.fn(async () => ({ id: "run" }));
+    const controller = new WorkflowController({ start } as never, {} as OrbitShutdownService);
+    const output = response();
+    await controller.start({ workflow: {}, mode: "draft", requestContext: { ownerId: "forged" } } as never, output.res);
+    expect(start).toHaveBeenCalledWith(expect.objectContaining({ requestContext: { ownerId: "local-owner" } }));
+    expect(output.res.statusCode).toBe(201);
+  });
+
 });

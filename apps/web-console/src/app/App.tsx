@@ -1,3 +1,4 @@
+import { fetchSopDrafts } from "../api/workflows";
 import { ErrorNotice } from "../components/feedback/ErrorNotice";
 import { getErrorMessage } from "../lib/errors/error-factory";
 import { useEffect, useState } from "react";
@@ -5,11 +6,11 @@ import {
   appRouteFromPathname,
   appRoutePath,
   type AppRoute,
-} from "../app-route";
+} from "./app-route";
 import {
   settingsSectionFromHash,
   type SettingsSection,
-} from "../settings-route";
+} from "../features/settings/lib/settings-route";
 import type { AppView } from "./types";
 import { streamLabel } from "../features/chat/lib/chat-format";
 import { useChat } from "../features/chat/hooks/use-chat";
@@ -18,12 +19,12 @@ import { useSkills } from "../features/skills/hooks/use-skills";
 import { useProfile } from "../features/settings/hooks/use-profile";
 import { LandingPage } from "../pages/LandingPage";
 import { AppSidebar } from "../components/layout/AppSidebar";
-import { WorkspaceTopBar } from "../components/workspace/WorkspaceTopBar";
-import { ChatView } from "../components/workspace/views/ChatView";
-import { AgentView } from "../components/workspace/views/AgentView";
-import { SkillsView } from "../components/workspace/views/SkillsView";
-import { SopBuilderView } from "../components/workspace/views/SopBuilderView";
-import { SettingsView } from "../components/workspace/views/SettingsView";
+import { WorkspaceTopBar } from "../components/layout/WorkspaceTopBar";
+import { ChatView } from "../pages/ChatView";
+import { AgentView } from "../pages/AgentView";
+import { SkillsView } from "../pages/SkillsView";
+import { SopBuilderView } from "../pages/SopBuilderView";
+import { SettingsView } from "../pages/SettingsView";
 
 /** 装配工作台页面、路由和各领域状态。 */
 export function App() {
@@ -44,6 +45,7 @@ export function App() {
   );
   const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(false);
   const [mobileNavOpen, setMobileNavOpen] = useState(false);
+  const [workflowCount, setWorkflowCount] = useState<number | null>(null);
   const [topQuery, setTopQuery] = useState("");
   const [error, setError] = useState<string | null>(null);
   const {
@@ -76,7 +78,7 @@ export function App() {
     handleSaveAgent,
     handleDeleteAgent,
     discardAgentDraft,
-  } = useAgents(skillRegistry, () => setView("agent"));
+  } = useAgents(() => setView("agent"));
   const {
     health,
     sessions,
@@ -123,6 +125,7 @@ export function App() {
       profileResult,
       agentResult,
       skillsResult,
+      fetchSopDrafts().then((drafts) => setWorkflowCount(drafts.length)),
     ]);
     const [runtimeResults, businessResults] = await Promise.all([
       runtimeResultsPromise,
@@ -268,6 +271,7 @@ export function App() {
           sessions={visibleSessions}
           agents={agents}
           installedSkills={installedSkills}
+          workflowCount={workflowCount}
           collapsed={isSidebarCollapsed}
           profile={profile}
           theme={theme}
@@ -324,12 +328,12 @@ export function App() {
               isNewDraft={isNewAgentDraft}
               error={agentError}
               saving={agentSaving}
-              installedSkills={installedSkills}
+            installedSkills={installedSkills}
               skillPreflight={agentSkillPreflight}
               skillPreflightLoading={agentSkillPreflightLoading}
               onDraftChange={handleAgentDraftChange}
               onResolveAgentSkills={() => void handleResolveAgentSkills()}
-              onSaveAgent={() => void handleSaveAgent()}
+              onSaveAgent={handleSaveAgent}
               onDiscardDraft={discardAgentDraft}
               onDeleteAgent={(agent) => void handleDeleteAgent(agent)}
               onNewAgent={() => void handleCreateAgent()}
@@ -348,7 +352,7 @@ export function App() {
               onUploadPackage={(input) => void handleUploadSkillPackage(input)}
               onRefreshRegistry={() => void handleRefreshSkillRegistry()}
             />
-            <SopBuilderView active={view === "builder"} query={topQuery} theme={theme} onThemeToggle={handleThemeToggle} />
+            <SopBuilderView onDraftCountChange={setWorkflowCount} active={view === "builder"} query={topQuery} theme={theme} onThemeToggle={handleThemeToggle} />
             <SettingsView
               active={view === "settings"}
               activeSection={settingsSection}
@@ -363,7 +367,7 @@ export function App() {
               onCancelProfileEdit={cancelProfileEdit}
               onProfileDraftChange={setProfileDraft}
               onSaveProfile={() => void saveProfile()}
-              onSectionChange={setSettingsSection}
+              onSectionChange={openSettings}
               onToggleProfileEdit={toggleProfileEdit}
               onThemeToggle={handleThemeToggle}
             />

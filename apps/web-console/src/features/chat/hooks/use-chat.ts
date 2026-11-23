@@ -12,13 +12,13 @@ import {
   type HealthStatus,
   type SessionDetail,
   type SessionSummary,
-} from "../../../api";
-import { shouldReloadSessionFromAgentEvent } from "../../../chat-stream-state";
-import { resolveActiveSessionId } from "../../../session-selection";
+} from "../../../api/index";
+import { shouldReloadSessionFromAgentEvent } from "../lib/chat-stream-state";
+import { resolveActiveSessionId } from "../lib/session-selection";
 import {
   isSessionHidden,
   readSessionMetadata,
-} from "../../../session-metadata";
+} from "../lib/session-metadata";
 import {
   sortSessionsByRecent,
   sortSessionsForSidebar,
@@ -253,7 +253,7 @@ export function useChat(
           void refreshSessions();
           const currentSessionId = activeSessionIdRef.current;
           if (
-            shouldReloadSessionFromAgentEvent({
+            currentSessionId && shouldReloadSessionFromAgentEvent({
               activeSessionId: currentSessionId,
               streamingSessionId: streamingSessionIdRef.current,
             })

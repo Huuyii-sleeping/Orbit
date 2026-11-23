@@ -10,7 +10,7 @@ import type {
   WorkflowRunSnapshot,
   WorkflowRuntimeEvent,
 } from "@orbit/workflow-core";
-import type { SopVersionSummary } from "../../../../api";
+import type { SopVersionSummary } from "../../../../api/index";
 import type { SopRunPhase } from "../use-sop-run";
 import { SopRunInterruptCard, type SopRunInterruptDecision } from "./SopRunInterruptCard";
 

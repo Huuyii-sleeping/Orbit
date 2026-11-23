@@ -1,6 +1,7 @@
+import { AgentConfigurationError, normalizeAgentConfiguration, type AgentConfiguration } from "@orbit/workflow-core";
 import { Inject, Injectable } from "@nestjs/common";
 import { randomUUID } from "node:crypto";
-import { LocalStoreService } from "../local-store.service.js";
+import { LocalStoreService } from "../storage/local-store.service.js";
 import { SkillRegistryService } from "../skills/skill-registry.service.js";
 import type { SkillRegistryItem } from "../skills/skill-types.js";
 import type { SkillRegistrySource, SkillSourceType } from "../skills/skill-types.js";
@@ -26,6 +27,8 @@ export type AgentProfile = {
   skills: AgentSkillBinding[];
   actions: string[];
   systemPrompt: string;
+  /** 随草稿保存并在发布时固定的运行配置。 */
+  configuration?: AgentConfiguration;
   /** Optional user-picked accent color as a `#rrggbb` hex string; empty means auto (hash-based). */
   color: string;
   createdAt: number;
@@ -63,17 +66,13 @@ const AGENTS_STORE_KEY = "agents";
 const defaultAgentProfile: Omit<AgentProfile, "id" | "createdAt" | "updatedAt"> = {
   revision: 0,
   avatarId: "brain",
-  name: "本地研发 Agent",
-  description: "面向代码、文档和自动化执行的本地 agent。",
-  scenario: "本地研发、资料整理、任务拆解和交付验证。",
-  skillIds: ["code-workspace", "memory-context", "quality-gate"],
-  skills: [
-    legacySkillBinding("code-workspace"),
-    legacySkillBinding("memory-context"),
-    legacySkillBinding("quality-gate"),
-  ],
-  actions: ["分析需求", "执行任务", "验证结果"],
-  systemPrompt: "你是一个严谨的本地工作台 agent，优先明确目标、执行验证，并给出可复查的结果。",
+  name: "",
+  description: "",
+  scenario: "",
+  skillIds: [],
+  skills: [],
+  actions: [],
+  systemPrompt: "",
   color: "",
 };
 
@@ -204,6 +203,7 @@ export function normalizeAgentProfile(value: unknown, fallbackId: string = rando
     skills,
     actions: cleanStringList(record.actions, 24, 80),
     systemPrompt: cleanOptionalText(record.systemPrompt, 1600) || defaultAgentProfile.systemPrompt,
+    configuration: normalizeAgentConfiguration(record.configuration),
     color: cleanColor(record.color),
     createdAt,
     updatedAt: cleanTimestamp(record.updatedAt, createdAt),
@@ -237,6 +237,7 @@ export class AgentProfileService {
       randomUUID(),
       now,
     );
+    this.validateRequiredFields(agent);
     const validated = await this.validateAgentSkillBindings(agent, {
       dropUnavailable: !Array.isArray(inputRecord.skillIds) && !Array.isArray(inputRecord.skills),
     });
@@ -267,6 +268,7 @@ export class AgentProfileService {
       current.id,
       current.createdAt,
     );
+    this.validateRequiredFields(updated);
     const validated = await this.validateAgentSkillBindings(updated);
     await this.store.updateSection<AgentProfile[]>(AGENTS_STORE_KEY, [], (latest) => {
       const persisted = latest.find((agent) => agent.id === agentId);
@@ -295,6 +297,15 @@ export class AgentProfileService {
     return value
       .map((item) => normalizeAgentProfile(item))
       .filter((agent, index, agents) => agents.findIndex((candidate) => candidate.id === agent.id) === index);
+  }
+
+  private validateRequiredFields(agent: AgentProfile) {
+    if (!agent.name) throw new AgentConfigurationError("请填写 Agent 名称。");
+    if (!agent.systemPrompt) throw new AgentConfigurationError("请填写 Agent 职责。");
+  }
+
+  private async writeAgents(agents: AgentProfile[]): Promise<AgentProfile[]> {
+    return this.store.writeSection(AGENTS_STORE_KEY, agents);
   }
 
   private async validateAgentSkillBindings(

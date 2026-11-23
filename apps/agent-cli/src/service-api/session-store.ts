@@ -1,7 +1,7 @@
 import { appendFile, mkdir, readFile, readdir, rename, rm, writeFile } from "node:fs/promises";
 import path from "node:path";
 import { setTimeout as delay } from "node:timers/promises";
-import { isLocalPersistenceEnabled } from "../runtime-config.js";
+import { isLocalPersistenceEnabled } from "../config/runtime-config.js";
 import { buildArtifactMetadata, isExpired } from "../security/local-retention.js";
 import { sanitizeAndRedactValue } from "../security/data-hygiene.js";
 import type {

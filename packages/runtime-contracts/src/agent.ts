@@ -1,3 +1,4 @@
+import type { AgentVersionSkillBinding } from "@orbit/workflow-core";
 import type { RuntimeBinding, RuntimeEventBase } from "./common.js";
 
 /** Agent 运行状态；终态不可逆。 */
@@ -28,6 +29,11 @@ export type AgentExecutionPolicy = {
 export type AgentExecutionContext = {
   agentId: string;
   agentVersion: string;
+  /** 可信版本快照指定的模型与技能绑定。 */
+  modelId?: string;
+  skillBindings?: AgentVersionSkillBinding[];
+  /** 摘要等独立任务可显式关闭会话 Memory，避免读取或写入原对话。 */
+  memory?: false;
   sessionId: string;
   resourceId: string;
   threadId: string;

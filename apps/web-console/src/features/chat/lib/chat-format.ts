@@ -1,5 +1,5 @@
-import type { ChatMessage, SessionSummary } from "../../../api";
-import type { SessionMetadataMap } from "../../../session-metadata";
+import type { ChatMessage, SessionSummary } from "../../../api/index";
+import type { SessionMetadataMap } from "./session-metadata";
 
 export function formatTime(value: number | null): string {
   if (!value) {

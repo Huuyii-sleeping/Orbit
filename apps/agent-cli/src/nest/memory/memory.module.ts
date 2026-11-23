@@ -1,5 +1,10 @@
-import { Module } from "@nestjs/common";
+import { Module, type DynamicModule } from "@nestjs/common";
 import { MemoryController } from "./memory.controller.js";
 
-@Module({ controllers: [MemoryController] })
-export class MemoryRuntimeModule {}
+/** 显式接入当前进程的运行依赖。 */
+@Module({})
+export class MemoryRuntimeModule {
+  static register(runtime: DynamicModule): DynamicModule {
+    return { module: MemoryRuntimeModule, imports: [runtime], controllers: [MemoryController] };
+  }
+}

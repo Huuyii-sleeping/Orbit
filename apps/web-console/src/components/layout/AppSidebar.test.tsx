@@ -13,10 +13,11 @@ describe("AppSidebar", () => {
   it("只展示 Agent 工作台入口，不提供独立审批收件箱", () => {
     const sidebar = AppSidebar({
       view: "agent",
-      health: { ok: true },
+      health: { ok: true, connected: true, bffStatus: "ok", agentStatus: "ok" },
       sessions: [],
       agents: [],
       installedSkills: [],
+      workflowCount: 7,
       collapsed: false,
       onNavigate: vi.fn(),
       onToggleCollapsed: vi.fn(),
@@ -24,5 +25,6 @@ describe("AppSidebar", () => {
     });
 
     expect(visibleText(sidebar)).not.toContain("审批收件箱");
+    expect(visibleText(sidebar)).toMatch(/工作流\s+7/);
   });
 });

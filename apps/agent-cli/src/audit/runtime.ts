@@ -1,10 +1,10 @@
 import { appendFile, mkdir, readFile } from "node:fs/promises";
 import path from "node:path";
 import * as process from "node:process";
-import { isLocalPersistenceEnabled } from "../runtime-config.js";
+import { isLocalPersistenceEnabled } from "../config/runtime-config.js";
 import { sanitizeAndRedactValue } from "../security/data-hygiene.js";
 import { buildArtifactMetadata, isExpired } from "../security/local-retention.js";
-import { nowTimestampMs, parseTimestampMs } from "../time.js";
+import { nowTimestampMs, parseTimestampMs } from "../lib/time.js";
 
 export type AuditCategory = "session" | "tool" | "security" | "retention";
 

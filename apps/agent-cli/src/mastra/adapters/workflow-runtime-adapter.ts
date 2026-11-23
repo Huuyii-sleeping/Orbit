@@ -28,7 +28,7 @@ import {
 import { getWorkflowSuspendedSteps, type AnyWorkflow } from "@mastra/core/workflows";
 import { assertWorkflowValueType } from "../../workflows/context.js";
 import { compileWorkflowForRuntime } from "../../workflows/compiler-adapter.js";
-import { AsyncEventQueue } from "../../runtime/async-event-queue.js";
+import { AsyncEventQueue } from "./async-event-queue.js";
 import { OrbitRuntimeEventJournal } from "../storage/event-journal.js";
 import { MastraRunMappingRepository } from "../storage/run-mapping-repository.js";
 import {
