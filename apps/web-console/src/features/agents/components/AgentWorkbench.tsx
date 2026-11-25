@@ -29,9 +29,7 @@ export function AgentWorkbench({
   onTestStatus: (status: WorkflowRunSnapshot["status"]) => void;
 }) {
   const workbench = useAgentWorkbench(agentId, onTestStatus);
-  const [input, setInput] = useState(
-    '{\n  "task": "请描述你的职责，并给出一份示例结果。"\n}',
-  );
+  const [input, setInput] = useState("");
   const [versionId, setVersionId] = useState("");
   const [releaseNotes, setReleaseNotes] = useState("");
   const { current } = workbench;

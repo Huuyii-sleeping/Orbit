@@ -157,6 +157,7 @@ export function normalizeAgentProfile(value: unknown): AgentProfile {
   const skills = normalizeAgentSkillBindings(record.skills, legacySkillIds);
   return {
     id: cleanText(record.id, "").slice(0, 80),
+    revision: Number.isSafeInteger(record.revision) && Number(record.revision) >= 0 ? Number(record.revision) : 0,
     avatarId: cleanText(
       record.avatarId,
       defaultAgentProfileInput.avatarId,
@@ -185,6 +186,7 @@ export function normalizeAgentProfile(value: unknown): AgentProfile {
 export function normalizeAgentProfileInput(value: unknown): AgentProfileInput {
   const agent = normalizeAgentProfile(value);
   return {
+    ...(asObject(value).revision === undefined ? {} : { revision: agent.revision }),
     avatarId: agent.avatarId,
     name: agent.name,
     description: agent.description,

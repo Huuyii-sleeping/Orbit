@@ -31,6 +31,7 @@ export function useAgentWorkbench(
   const [busy, setBusy] = useState(false);
   const [publishing, setPublishing] = useState(false);
   const latestRunId = useRef<string>();
+  const terminalRun = useRef<WorkflowRunSnapshot>();
   const statusCallback = useRef(onTestStatus);
   statusCallback.current = onTestStatus;
 
@@ -79,6 +80,10 @@ export function useAgentWorkbench(
       try {
         const run = await fetchWorkflowRun(runId!);
         if (!disposed) {
+          // 取消响应先返回时，丢弃取消前发出的旧查询与后续旧状态事件。
+          const final = terminalRun.current;
+          if (final?.id === run.id && !isTerminalWorkflowRunStatus(run.status)) return;
+          if (isTerminalWorkflowRunStatus(run.status)) terminalRun.current = run;
           setCurrent((item) =>
             item?.run.id === run.id ? { ...item, run } : item,
           );
@@ -100,6 +105,7 @@ export function useAgentWorkbench(
       runId,
       onEvent: (event) => {
         if (disposed) return;
+        if (terminalRun.current?.id === event.runId && (event.type === "run.status" || event.type === "run.waiting")) return;
         setCurrent((item) =>
           item?.run.id === event.runId
             ? {
@@ -112,7 +118,7 @@ export function useAgentWorkbench(
           setLogs((items) => [...items.slice(-199), event.message]);
         if (event.type === "node.output" && event.delta)
           setText((previous) => previous + event.delta);
-        if (event.type === "run.status" && latestRunId.current === event.runId)
+        if (event.type === "run.status" && latestRunId.current === event.runId && terminalRun.current?.id !== event.runId)
           statusCallback.current(event.status);
       },
       onTerminal: () => {
@@ -161,7 +167,9 @@ export function useAgentWorkbench(
     setBusy(true);
     try {
       const run = await cancelWorkflowRun(current.run.id);
+      if (isTerminalWorkflowRunStatus(run.status)) terminalRun.current = run;
       setCurrent({ ...current, run });
+      statusCallback.current(run.status);
     } catch (cause) {
       setError(cause instanceof Error ? cause.message : String(cause));
     } finally {

@@ -12,10 +12,24 @@ describe("Agent 运行错误提示", () => {
       "更换模型连接",
     );
   });
+  it.each([
+    ["Incorrect API key provided", "API Key"],
+    ["Authentication Fails", "API Key"],
+    ["Insufficient Balance", "余额"],
+    ["insufficient_quota", "额度"],
+    ["Rate limit reached", "请求过于频繁"],
+    ["节点执行超过 30000ms。", "超时"],
+    ["Agent child run qa 的输出不符合发布版本 schema。", "输出格式"],
+    ["Agent 工具不可用：read_file", "工具"],
+  ])("解释 %s 并给出下一步", (raw, expected) => {
+    const result = agentRunErrorMessage(raw);
+    expect(result).toContain(expected);
+    expect(result).not.toBe(raw);
+  });
   it("未知错误和缺少模型提示保留原文", () => {
     expect(
       agentRunErrorMessage("请选择模型连接，或配置系统默认 MODEL_ID。"),
     ).toBe("请选择模型连接，或配置系统默认 MODEL_ID。");
-    expect(agentRunErrorMessage("Too many requests")).toBe("Too many requests");
+    expect(agentRunErrorMessage("Unrecognized provider error")).toBe("Unrecognized provider error");
   });
 });

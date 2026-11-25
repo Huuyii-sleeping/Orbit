@@ -200,6 +200,8 @@ export function applyWorkflowRuntimeEventToSnapshot(
   event: WorkflowRuntimeEvent,
 ): WorkflowRunSnapshot {
   if (event.runId !== run.id) return run;
+  // 查询或取消响应可能先于 SSE 回放到达；运行终态不可被旧状态恢复。
+  if (isTerminalWorkflowRunStatus(run.status) && (event.type === "run.status" || event.type === "run.waiting")) return run;
   if (event.type === "run.status") {
     return {
       ...run,

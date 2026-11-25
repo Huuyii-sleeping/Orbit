@@ -134,6 +134,8 @@ export type AgentSkillPreflightResult =
 /** User-managed agent profile displayed and edited in the Agent management workspace. */
 export type AgentProfile = {
   id: string;
+  /** 保存时携带服务端修订号；旧数据读取时按 0 处理。 */
+  revision?: number;
   avatarId: string;
   name: string;
   description: string;
@@ -162,6 +164,7 @@ export type AgentProfileInput = Pick<
   | "actions"
   | "systemPrompt"
   | "configuration"
+  | "revision"
   | "color"
 >;
 

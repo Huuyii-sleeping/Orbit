@@ -20,6 +20,19 @@ const run: WorkflowRunSnapshot = {
 };
 
 describe("workflow runtime projection", () => {
+  it.each(["cancelled", "failed", "succeeded"] as const)("%s 终态不会被晚到的运行与等待事件覆盖，输出仍可补齐", (status) => {
+    const terminal = { ...run, status, finishedAt: 50 };
+    expect(applyWorkflowRuntimeEventToSnapshot(terminal, {
+      id: 1, runId: run.id, at: 10, type: "run.status", status: "running",
+    })).toEqual(terminal);
+    expect(applyWorkflowRuntimeEventToSnapshot(terminal, {
+      id: 2, runId: run.id, at: 20, type: "run.waiting", nodeId: "agent", reason: "late event",
+    })).toEqual(terminal);
+    expect(applyWorkflowRuntimeEventToSnapshot(terminal, {
+      id: 3, runId: run.id, at: 40, type: "run.output", output: { text: "result" },
+    })).toMatchObject({ status, finishedAt: 50, output: { text: "result" } });
+  });
+
   it("以固定七项能力矩阵递归映射阶段 E 节点，且只关闭未通过的 Parallel/Merge", () => {
     const iteration = builtinNodeRegistry.get("iteration")!;
     const approval = builtinNodeRegistry.get("human-approval")!;

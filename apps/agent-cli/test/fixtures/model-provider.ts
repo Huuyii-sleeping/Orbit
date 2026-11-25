@@ -1,14 +1,13 @@
 import { createServer, type ServerResponse } from "node:http";
 
 /** 协议测试端点；只模拟供应商 HTTP，SDK、Mastra Agent 和工具执行使用真实实现。 */
-export async function startModelProvider(options: { tool?: { name: string; input: Record<string, unknown> }; textOnly?: boolean } = {}) {
+export async function startModelProvider(options: { tool?: { name: string; input: Record<string, unknown> }; textOnly?: boolean; text?: (body: Record<string, any>) => string } = {}) {
   const requests: Array<{
     path: string;
     headers: Record<string, unknown>;
     body: Record<string, any>;
   }> = [];
-  const state = { statusCode: 200, hold: false };
-  const text = '{"text":"adapter-ok"}';
+  const state = { statusCode: 200, hold: false, errorMessage: "fixture unavailable" };
   const toolName = options.tool?.name ?? "echo";
   const toolInput = options.tool?.input ?? { value: "hello" };
   const input = JSON.stringify(toolInput);
@@ -20,6 +19,7 @@ export async function startModelProvider(options: { tool?: { name: string; input
     for await (const chunk of request) raw += chunk;
     const body = JSON.parse(raw);
     const path = request.url ?? "";
+    const text = options.text?.(body) ?? '{"text":"adapter-ok"}';
     requests.push({ path, headers: request.headers, body });
     if (state.statusCode !== 200) {
       response.writeHead(state.statusCode, { "Content-Type": "application/json" });
@@ -29,7 +29,7 @@ export async function startModelProvider(options: { tool?: { name: string; input
           error: {
             code: state.statusCode,
             type: "permission_error",
-            message: "fixture unavailable",
+            message: state.errorMessage,
             status: "PERMISSION_DENIED",
           },
         }),
@@ -223,7 +223,7 @@ export async function startModelProvider(options: { tool?: { name: string; input
     state,
     close: () =>
       new Promise<void>((resolve, reject) =>
-        server.close((error) => (error ? reject(error) : resolve())),
+        { server.closeAllConnections(); server.close((error) => (error ? reject(error) : resolve())); },
       ),
   };
 }

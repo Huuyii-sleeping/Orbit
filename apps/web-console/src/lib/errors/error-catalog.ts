@@ -199,6 +199,14 @@ export const domainErrors: Record<
     kind: "not-found",
     message: "这份工作流已不存在，请刷新工作流列表。",
   },
+  AGENT_REVISION_CONFLICT: {
+    kind: "conflict",
+    message: "这个 Agent 已被其他窗口更新。当前修改仍保留，请先复制需要保留的内容，再刷新最新配置。",
+  },
+  AGENT_REVISION_INVALID: {
+    kind: "validation",
+    message: "Agent 修订号无效，请刷新配置后重试。",
+  },
   SOP_REVISION_CONFLICT: {
     kind: "conflict",
     message: "这份工作流已被更新，请加载最新版本或合并修改后再保存。",

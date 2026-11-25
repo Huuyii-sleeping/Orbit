@@ -3,6 +3,7 @@ import type { AgentProfile, AgentProfileInput } from "../../../api/index";
 
 export function agentDraftFromProfile(agent: AgentProfile): AgentProfileInput {
   return {
+    revision: agent.revision ?? 0,
     avatarId: agent.avatarId,
     name: agent.name,
     description: agent.description,

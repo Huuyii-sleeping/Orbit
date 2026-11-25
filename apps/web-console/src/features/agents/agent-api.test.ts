@@ -1,6 +1,7 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 import {
   defaultAgentProfileInput,
+  normalizeAgentProfileInput,
   fetchAgentTests,
   fetchAgentTools,
   normalizeAgentProfile,
@@ -11,6 +12,18 @@ import {
 afterEach(() => vi.unstubAllGlobals());
 
 describe("Agent 工作台 API", () => {
+  it("保存时携带读取的 revision，避免覆盖其他窗口的新配置", async () => {
+    const profile = normalizeAgentProfile({ ...defaultAgentProfileInput, id: "a", revision: 7 });
+    expect(profile).toMatchObject({ revision: 7 });
+    expect(normalizeAgentProfileInput(profile)).toMatchObject({ revision: 7 });
+    const fetcher = vi.fn(async (_url, init) => {
+      expect(JSON.parse(init.body).revision).toBe(7);
+      return Response.json({ ok: true, agent: { ...profile, revision: 8 } });
+    });
+    vi.stubGlobal("fetch", fetcher);
+    expect(await updateAgentProfile("a", profile)).toMatchObject({ revision: 8 });
+  });
+
   it("配置经过保存与读取后保持模型、工具和输出约束", async () => {
     const configuration = {
       modelId: "analysis-model",

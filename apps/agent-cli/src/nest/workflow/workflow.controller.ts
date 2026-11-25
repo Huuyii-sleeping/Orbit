@@ -96,8 +96,8 @@ export class WorkflowController {
       return;
     }
     try {
-      await this.runtime.cancel({ runId });
-      writeJson(res, 202, { ok: true, run });
+      const cancelled = await this.runtime.cancel({ runId });
+      writeJson(res, 202, { ok: true, run: cancelled });
     } catch (error) {
       const terminal = error instanceof RuntimePortError && error.code === "RUNTIME_TERMINAL_CONFLICT";
       writeJson(res, terminal ? 409 : 400, {

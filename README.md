@@ -2,6 +2,8 @@
 
 一体化 AI Agent 工作台：配置 Agent、管理技能、编排 SOP、测试运行和发布版本。
 
+当前开发顺序、阶段状态与验收标准见 [开发路线](docs/development-roadmap.md)。
+
 ## 项目结构
 
 | 目录 | 职责 |

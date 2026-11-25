@@ -15,6 +15,15 @@ function response() {
 }
 
 describe("WorkflowController", () => {
+  it("取消响应返回 Runtime 完成取消后的快照，而非取消前的 running 快照", async () => {
+    const running = { id: "run-1", workflowId: "w", mode: "draft", status: "running", createdAt: 1, inputs: {}, nodeRuns: {} };
+    const runtime = { get: vi.fn(async () => running), cancel: vi.fn(async () => ({ ...running, status: "cancelled", finishedAt: 2 })) } as unknown as WorkflowRuntimePort;
+    const output = response();
+    await new WorkflowController(runtime, {} as OrbitShutdownService).cancel("run-1", output.res);
+    expect(output.res.statusCode).toBe(202);
+    expect(output.body()).toMatchObject({ ok: true, run: { status: "cancelled", finishedAt: 2 } });
+  });
+
   it("将 BFF capability 列表映射到稳定 WorkflowRuntimePort command", async () => {
     const run = {
       id: "run-1",
