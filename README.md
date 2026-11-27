@@ -12,7 +12,7 @@
 | `apps/skill-registry` | 独立技能仓库，管理技能包、版本和下载 |
 | `packages/workflow-core` | 工作流模型、节点注册、校验和编译 |
 | `packages/runtime-contracts` | Agent、Workflow、Tool、Memory 运行接口 |
-| `packages/service-auth` | BFF 与 Agent 服务之间的受信令牌和同源地址校验 |
+| `packages/service-auth` | BFF 与 Agent 服务之间的受信令牌、租户上下文和同源地址校验 |
 | `skills` / `registries` | 产品内置技能与仓库种子数据 |
 | `examples/python` / `examples/typescript` | 独立教学示例，不参与生产构建 |
 | `docs/architecture.md` | 当前目录职责与依赖边界 |
@@ -26,6 +26,8 @@ Web → BFF → Agent Service → Runtime Ports → Mastra → 模型 / 工具 /
 Web 只访问 BFF 的 `/api/*`。产品层使用共享契约，Mastra 的内部类型和执行状态留在运行时适配层。生产运行时锁定为 `@mastra/core@1.52.1`。
 
 对外 SaaS 的认证、租户隔离现状和部署要求见 [SaaS 身份说明](docs/saas-identity.md)。当前 SaaS 模式仅开放已隔离的身份和个人配置接口，其余业务接口会拒绝访问。
+
+服务端后续开发按 [Server 开发路线与进度](docs/server-development-roadmap.md) 推进，文档包含当前状态、阶段任务、验收条件和代码入口，可在侧边栏打开并随开发更新。
 
 服务端按进程内模块组织，现有部署和端口保持不变：
 
@@ -92,6 +94,7 @@ pnpm dev:web
 | `AGENT_HTTP_PORT` | `3181` |
 | `AGENT_HTTP_HOST` | 默认 `127.0.0.1`；对外监听必须配置服务令牌 |
 | `AGENT_SERVICE_TOKEN` | BFF 与 Agent 服务共用的内部 Bearer 令牌；生产必填，不传给浏览器 |
+| `AGENT_MODE` | 开发默认 `local`，生产强制 `saas`；SaaS 请求需携带 BFF 生成的可信租户身份 |
 | `BFF_PORT` | `3182` |
 | `AGENT_SERVICE_BASE_URL` | `http://127.0.0.1:3181` |
 | `SKILL_REGISTRY_PORT` | `3190` |
