@@ -3,6 +3,7 @@ import { SqliteWorkflowRunsRepository } from "./sqlite-workflow-runs.repository.
 import { WORKFLOW_RUNS_REPOSITORY } from "./workflow-runs.types.js";
 import { WorkflowRunsController } from "./workflow-runs.controller.js";
 import { WorkflowRunsService } from "./workflow-runs.service.js";
+import { OrganizationAuthorizationModule } from "../identity/organization-authorization.module.js";
 
 /** 运行控制只消费 SOP 和 Agent 版本仓库，不重新创建其他领域的存储。 */
 @Module({})
@@ -15,7 +16,7 @@ export class WorkflowRunsModule {
   }): DynamicModule {
     return {
       module: WorkflowRunsModule,
-      imports: [options.runtime, options.database, options.versions, options.sops],
+      imports: [options.runtime, options.database, options.versions, options.sops, OrganizationAuthorizationModule.register(options.database)],
       controllers: [WorkflowRunsController],
       providers: [
         { provide: WORKFLOW_RUNS_REPOSITORY, useClass: SqliteWorkflowRunsRepository },

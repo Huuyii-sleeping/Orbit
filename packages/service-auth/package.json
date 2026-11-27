@@ -4,7 +4,11 @@
   "private": true,
   "type": "module",
   "exports": {
-    ".": { "types": "./dist/index.d.ts", "import": "./dist/index.js" }
+    ".": { "types": "./dist/index.d.ts", "import": "./dist/index.js" },
+    "./http": {
+      "types": "./dist/tenant-http-limits.d.ts",
+      "import": "./dist/tenant-http-limits.js"
+    }
   },
   "files": ["dist"],
   "scripts": {
@@ -12,8 +16,13 @@
     "test": "vitest run --no-cache"
   },
   "devDependencies": {
+    "@types/express": "5.0.6",
     "@types/node": "^24.0.0",
+    "express": "5.2.1",
     "typescript": "^5.9.0",
     "vitest": "^2.0.5"
+  },
+  "dependencies": {
+    "express-rate-limit": "8.6.0"
   }
 }

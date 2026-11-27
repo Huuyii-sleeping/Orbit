@@ -23,7 +23,7 @@ describe("SopDatabase", () => {
   it("启用 WAL 并创建显式迁移表、SOP 运行表和 AgentVersion，但不创建审批产品表", async () => {
     const database = new SopDatabase({ sopDataRoot: await root() });
     try {
-      expect(database.health()).toMatchObject({ ok: true, journalMode: "wal", migrationVersion: 7 });
+      expect(database.health()).toMatchObject({ ok: true, journalMode: "wal", migrationVersion: 9 });
       const tables = database.database.prepare("select name from sqlite_master where type = 'table' order by name").all() as Array<{ name: string }>;
       expect(tables.map((item) => item.name)).toEqual(expect.arrayContaining([
         "schema_migrations",
@@ -142,19 +142,41 @@ describe("SopDatabase", () => {
         create table agent_versions(id text primary key, agent_profile_id text not null, version integer not null,
           content_hash text not null, name text not null, description text not null, snapshot_json text not null,
           created_by text not null, release_notes text not null, created_at integer not null, unique(agent_profile_id, version));
+        create table workflow_runs(id text primary key, workflow_id text not null, version_id text,
+          content_hash text, mode text not null, status text not null, input_json text not null,
+          output_json text, error_json text, created_at integer not null, started_at integer,
+          finished_at integer, node_instances_json text, child_runs_json text, waiting_json text);
+        create table workflow_node_runs(run_id text not null, node_id text not null, status text not null,
+          attempt integer not null, input_json text, output_json text, error_json text,
+          started_at integer, finished_at integer, duration_ms integer, primary key(run_id, node_id),
+          foreign key(run_id) references workflow_runs(id) on delete cascade);
+        create table workflow_events(run_id text not null, event_id integer not null, type text not null,
+          event_json text not null, created_at integer not null, primary key(run_id, event_id),
+          foreign key(run_id) references workflow_runs(id) on delete cascade);
         insert into sop_drafts values('same-id', 0, 2, '旧草稿', '', '{}', 1, 1);
         insert into sop_versions values('same-version', 'same-id', 1, 2, 'hash', 'old', '', '{}', 1);
         insert into sop_templates values('same-template', 1, '旧模板', '', 'same-id', 'same-version', '{}', '{}', 1, 1);
         insert into agent_versions values('same-agent', 'same-profile', 1, 'hash', '旧 Agent', '', '{}', 'old', '', 1);
+        insert into workflow_runs(id, workflow_id, mode, status, input_json, created_at)
+          values('same-run', 'same-id', 'draft', 'succeeded', '{}', 1);
+        insert into workflow_node_runs(run_id, node_id, status, attempt)
+          values('same-run', 'node-1', 'succeeded', 1);
+        insert into workflow_events values('same-run', 1, 'run.status', '{}', 1);
       `);
     } finally { legacy.close(); }
     const database = new SopDatabase({ sopDataRoot: dataRoot, requireTenantContext: true });
     try {
-      expect(database.health().migrationVersion).toBe(7);
+      expect(database.health().migrationVersion).toBe(9);
       for (const table of ["sop_drafts", "sop_versions", "sop_templates", "agent_versions"]) {
         const row = database.database.prepare(`select issuer, tenant_id from ${table}`).get() as { issuer: string; tenant_id: string };
         expect(row).toEqual({ issuer: "", tenant_id: "" });
       }
+      for (const table of ["workflow_runs", "workflow_node_runs", "workflow_events"]) {
+        expect(database.database.prepare(`select issuer, tenant_id from ${table}`).get())
+          .toEqual({ issuer: "", tenant_id: "" });
+      }
+      expect(database.database.prepare("pragma foreign_key_check").all()).toEqual([]);
+      expect(database.database.prepare("select initiated_by from workflow_runs").get()).toEqual({ initiated_by: null });
       database.database.prepare(`insert into sop_drafts
         (issuer, tenant_id, id, revision, schema_version, name, summary, content_json, created_at, updated_at)
         values (?, ?, 'same-id', 0, 2, '租户草稿', '', '{}', 1, 1)`).run("issuer", "org-a");

@@ -6,10 +6,12 @@ import {
   type StartWorkflowRunCommand,
   type WorkflowRuntimePort,
 } from "@orbit/runtime-contracts";
-import { isTerminalWorkflowRunStatus } from "@orbit/workflow-core";
+import { isTerminalWorkflowRunStatus, WorkflowResourceLimitError } from "@orbit/workflow-core";
 import { parseWorkflowEventCursor, writeJson, writeSseEvent } from "../http.js";
 import { WORKFLOW_RUNTIME_PORT } from "../tokens.js";
 import { OrbitShutdownService } from "../orbit-shutdown.service.js";
+import { currentServiceTenant, serviceTenantOwner } from "@orbit/service-auth";
+import { TenantQuotaError } from "@orbit/service-auth";
 
 type StartWorkflowRequest = {
   workflow: unknown;
@@ -44,9 +46,12 @@ export class WorkflowController {
   @Post()
   async start(@Body() input: StartWorkflowRequest, @Res() res: ServerResponse): Promise<void> {
     try {
+      const tenant = currentServiceTenant();
       const run = await this.runtime.start({
-        // 本地单用户宿主与聊天 Memory 使用相同归属；不接受请求体伪造 owner。
-        requestContext: { ownerId: "local-owner" },
+        // 不接受请求体伪造 owner；服务身份由 HTTP 鉴权边界建立。
+        requestContext: tenant
+          ? { ownerId: serviceTenantOwner(tenant), tenantId: tenant.tenantId }
+          : { ownerId: "local-owner" },
         workflow: input.workflow as StartWorkflowRunCommand["workflow"],
         workflowDependencies: input.workflow_dependencies as StartWorkflowRunCommand["workflowDependencies"],
         agentDependencies: input.agent_dependencies as StartWorkflowRunCommand["agentDependencies"],
@@ -59,10 +64,11 @@ export class WorkflowController {
       });
       writeJson(res, 201, { ok: true, run });
     } catch (error) {
-      writeJson(res, 400, {
+      if (error instanceof TenantQuotaError) res.setHeader("Retry-After", error.retryAfterSeconds);
+      writeJson(res, error instanceof WorkflowResourceLimitError || error instanceof TenantQuotaError ? error.statusCode : 400, {
         ok: false,
         error: {
-          code: "WORKFLOW_RUN_INVALID",
+          code: error instanceof WorkflowResourceLimitError || error instanceof TenantQuotaError ? error.code : "WORKFLOW_RUN_INVALID",
           message: error instanceof Error ? error.message : String(error),
         },
       });
@@ -143,13 +149,17 @@ export class WorkflowController {
     res.setHeader("Connection", "keep-alive");
     res.flushHeaders?.();
     const unregisterSse = this.shutdown.registerSseClient(res);
-    const iterator = this.runtime.events({ runId, sinceId: cursor })[Symbol.asyncIterator]();
+    const subscription = new AbortController();
+    const iterator = this.runtime.events({ runId, sinceId: cursor, signal: subscription.signal })[Symbol.asyncIterator]();
     let connectionClosed = false;
+    let markClosed!: () => void;
     const closed = new Promise<"closed">((resolve) => {
-      req.once("close", () => {
+      markClosed = () => {
         connectionClosed = true;
+        subscription.abort();
         resolve("closed");
-      });
+      };
+      res.once("close", markClosed);
     });
     try {
       while (!connectionClosed) {
@@ -160,7 +170,9 @@ export class WorkflowController {
         if (event.type === "run.status" && isTerminalWorkflowRunStatus(event.status)) break;
       }
     } finally {
+      subscription.abort();
       await iterator.return?.();
+      res.off("close", markClosed);
       unregisterSse();
     }
     if (!connectionClosed) res.end();
@@ -191,10 +203,11 @@ export class WorkflowController {
     } catch (error) {
       const conflict = error instanceof RuntimePortError
         && (error.code === "RUNTIME_TERMINAL_CONFLICT" || error.code === "RUNTIME_OWNERSHIP_CONFLICT");
-      writeJson(res, conflict ? 409 : 400, {
+      const missing = error instanceof RuntimePortError && error.code === "RUNTIME_NOT_FOUND";
+      writeJson(res, error instanceof WorkflowResourceLimitError ? error.statusCode : missing ? 404 : conflict ? 409 : 400, {
         ok: false,
         error: {
-          code: conflict ? "WORKFLOW_RUN_RESUME_CONFLICT" : "WORKFLOW_RUN_RESUME_FAILED",
+          code: error instanceof WorkflowResourceLimitError ? error.code : missing ? "WORKFLOW_RUN_NOT_FOUND" : conflict ? "WORKFLOW_RUN_RESUME_CONFLICT" : "WORKFLOW_RUN_RESUME_FAILED",
           message: error instanceof Error ? error.message : String(error),
         },
       });

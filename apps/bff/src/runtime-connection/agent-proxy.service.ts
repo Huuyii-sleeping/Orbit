@@ -1,11 +1,12 @@
 import { writeStreamChunk } from "../stream-utils.js";
 import { Injectable } from "@nestjs/common";
-import { resolveAgentServiceToken, resolveServiceEndpoint, type AgentServiceAuthOptions } from "@orbit/service-auth";
+import { resolveAgentServiceToken, resolveServiceEndpoint, currentServiceTenant, encodeServiceTenant,
+  SERVICE_TENANT_HEADER, type AgentServiceAuthOptions } from "@orbit/service-auth";
 import type { IncomingMessage, ServerResponse } from "node:http";
 import { errorPayload, applyCommonHeaders, writeJson, type JsonObject } from "../http/http-utils.js";
 
 export type ProxyResult =
-  | { ok: true; status: number; body: unknown }
+  | { ok: true; status: number; body: unknown; retryAfterSeconds?: number }
   | { ok: false; status: number; body: JsonObject };
 
 /** BFF 到受信 Agent 上游的连接、认证与超时配置。 */
@@ -55,13 +56,17 @@ export class AgentProxyService {
         redirect: "error",
         headers: {
           ...(input.body === undefined ? {} : { "Content-Type": "application/json" }),
-          ...(this.agentServiceToken ? { Authorization: `Bearer ${this.agentServiceToken}` } : {}),
+          ...this.serviceHeaders(),
         },
         body: input.body === undefined ? undefined : JSON.stringify(input.body),
       });
       const raw = await response.text();
       const body = raw.trim() ? (JSON.parse(raw) as unknown) : {};
-      return { ok: true, status: response.status, body };
+      const retryAfter = Number(response.headers.get("retry-after"));
+      return { ok: true, status: response.status, body,
+        ...(response.status === 429 && Number.isSafeInteger(retryAfter) && retryAfter > 0
+          ? { retryAfterSeconds: Math.min(retryAfter, 3_600) } : {}),
+      };
     } catch (error) {
       return {
         ok: false,
@@ -257,9 +262,18 @@ export class AgentProxyService {
     const timer = setTimeout(() => controller.abort(), this.requestTimeoutMs);
     try {
       const headers = new Headers(init.headers);
-      if (this.agentServiceToken) headers.set("Authorization", `Bearer ${this.agentServiceToken}`);
+      for (const [name, value] of Object.entries(this.serviceHeaders())) headers.set(name, value);
       return await this.fetchImpl(url, { ...init, headers, redirect: "error", signal: init.signal ? AbortSignal.any([init.signal, controller.signal]) : controller.signal });
     } finally { clearTimeout(timer); }
+  }
+
+  private serviceHeaders(): Record<string, string> {
+    const tenant = currentServiceTenant();
+    if (tenant && !this.agentServiceToken) throw new Error("Tenant requests require Agent service credentials");
+    return {
+      ...(this.agentServiceToken ? { Authorization: `Bearer ${this.agentServiceToken}` } : {}),
+      ...(tenant ? { [SERVICE_TENANT_HEADER]: encodeServiceTenant(tenant) } : {}),
+    };
   }
 
   private async pipeWebStream(upstream: Response, res: ServerResponse): Promise<void> {

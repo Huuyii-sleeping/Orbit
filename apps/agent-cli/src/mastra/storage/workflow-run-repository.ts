@@ -1,6 +1,9 @@
 import path from "node:path";
+import { assertWorkflowOutputBudget, WORKFLOW_OUTPUT_LIMITS } from "@orbit/workflow-core";
 import { stableSerialize, type AgentVersion, type WorkflowIR, type WorkflowRunSnapshot } from "@orbit/workflow-core";
 import { RuntimePortError } from "@orbit/runtime-contracts";
+import type { ServiceTenantIdentity } from "@orbit/service-auth";
+import { TENANT_WORKFLOW_QUOTAS, TenantQuotaError } from "@orbit/service-auth";
 import { isLocalPersistenceEnabled } from "../../config/runtime-config.js";
 import { retentionDaysFor } from "../../security/local-retention.js";
 import { JsonFileRepository } from "./json-file-repository.js";
@@ -27,6 +30,8 @@ export type StoredMastraWorkflowRun = {
   targetNodeId?: string;
   nodeInputs?: Record<string, unknown>;
   ownerId?: string;
+  /** 创建时的可信组织归属，随运行持久化；缺省仅表示历史本地运行。 */
+  tenant?: ServiceTenantIdentity;
   interruptDecision?: WorkflowInterruptDecisionReceipt;
   retentionExpiresAt?: number;
 };
@@ -48,6 +53,8 @@ function assertIdentity(current: StoredMastraWorkflowRun, next: StoredMastraWork
     current.snapshot.mode !== next.snapshot.mode ||
     current.nativeRunId !== next.nativeRunId ||
     current.runtimeWorkflowId !== next.runtimeWorkflowId ||
+    current.ownerId !== next.ownerId ||
+    stableSerialize(current.tenant ?? null) !== stableSerialize(next.tenant ?? null) ||
     stableSerialize(current.agentDependencies ?? []) !== stableSerialize(next.agentDependencies ?? [])
   ) {
     throw new RuntimePortError(
@@ -83,6 +90,7 @@ export class MastraWorkflowRunRepository {
   }
 
   async create(record: StoredMastraWorkflowRun): Promise<StoredMastraWorkflowRun> {
+    this.assertBudget(record);
     let stored: StoredMastraWorkflowRun | null = null;
     await this.repository.update((envelope) => {
       const current = envelope.records[record.snapshot.id];
@@ -91,6 +99,14 @@ export class MastraWorkflowRunRepository {
         stored = current;
         return;
       }
+      if (!terminal(record.snapshot.status)) {
+        const unfinished = Object.values(envelope.records).filter((item) => !terminal(item.snapshot.status));
+        if (unfinished.length >= TENANT_WORKFLOW_QUOTAS.globalUnfinishedRuns) throw new TenantQuotaError("WORKFLOW_CAPACITY_LIMIT");
+        if (record.tenant && unfinished.filter((item) => item.tenant?.issuer === record.tenant!.issuer
+          && item.tenant.tenantId === record.tenant!.tenantId).length >= TENANT_WORKFLOW_QUOTAS.unfinishedRuns) {
+          throw new TenantQuotaError("WORKFLOW_CONCURRENCY_LIMIT");
+        }
+      }
       envelope.records[record.snapshot.id] = record;
       stored = record;
     });
@@ -98,6 +114,7 @@ export class MastraWorkflowRunRepository {
   }
 
   async update(record: StoredMastraWorkflowRun): Promise<StoredMastraWorkflowRun> {
+    this.assertBudget(record);
     let stored: StoredMastraWorkflowRun | null = null;
     await this.repository.update((envelope) => {
       const current = envelope.records[record.snapshot.id];
@@ -110,6 +127,7 @@ export class MastraWorkflowRunRepository {
       const next = terminal(record.snapshot.status) && record.retentionExpiresAt === undefined
         ? { ...record, retentionExpiresAt: this.now() + this.terminalRetentionMs }
         : record;
+      this.assertBudget(next);
       envelope.records[record.snapshot.id] = next;
       stored = next;
     });
@@ -132,6 +150,19 @@ export class MastraWorkflowRunRepository {
       result = structuredClone(record);
     });
     return result;
+  }
+
+  /** 仅撤销尚未开始执行的预留记录，不能据此移除已经运行的任务。 */
+  async discardUnstarted(runId: string, nativeRunId: string): Promise<void> {
+    await this.repository.update((envelope) => {
+      const record = envelope.records[runId];
+      if (record?.nativeRunId === nativeRunId && record.snapshot.status === "running") delete envelope.records[runId];
+    });
+  }
+
+  private assertBudget(record: StoredMastraWorkflowRun): void {
+    assertWorkflowOutputBudget(record.snapshot, WORKFLOW_OUTPUT_LIMITS.snapshotBytes);
+    assertWorkflowOutputBudget(record, WORKFLOW_OUTPUT_LIMITS.recordBytes);
   }
 
   /** 原子登记或比较同一 run 的 interrupt 决定。 */
@@ -161,6 +192,7 @@ export class MastraWorkflowRunRepository {
         createdAt: now,
         expiresAt: now + this.decisionTtlMs,
       };
+      this.assertBudget(record);
       outcome = "claimed";
     });
     return outcome;

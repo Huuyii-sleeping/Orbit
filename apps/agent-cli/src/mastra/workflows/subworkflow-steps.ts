@@ -1,5 +1,6 @@
 import { createHash } from "node:crypto";
 import type { WorkflowIRSubworkflowNode } from "@orbit/workflow-core";
+import { assertWorkflowOutputBudget, WORKFLOW_OUTPUT_LIMITS } from "@orbit/workflow-core";
 import { createStep, createWorkflow, type AnyWorkflow } from "@mastra/core/workflows";
 import { assertWorkflowValueType } from "../../workflows/context.js";
 import {
@@ -102,6 +103,7 @@ export function mergeSubworkflowFrame(
   const failure = subworkflowFailure(node, childFrame);
   if (failure) throw failure;
   const childOutput = childWorkflowOutput(node, childFrame);
+  assertWorkflowOutputBudget(childOutput, WORKFLOW_OUTPUT_LIMITS.nodeBytes);
   const nodeOutput = node.config.outputBindings.length > 0
     ? Object.fromEntries(node.config.outputBindings.map((binding) => {
       const value = childOutput[binding.outputId];
@@ -109,6 +111,7 @@ export function mergeSubworkflowFrame(
       return [`output:${binding.outputId}`, value];
     }))
     : { result: childOutput };
+  assertWorkflowOutputBudget(nodeOutput, WORKFLOW_OUTPUT_LIMITS.nodeBytes);
   return {
     ...parentFrame,
     nodeOutputs: { ...parentFrame.nodeOutputs, [node.id]: nodeOutput },

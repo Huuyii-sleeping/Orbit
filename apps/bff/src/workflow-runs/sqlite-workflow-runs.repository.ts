@@ -1,5 +1,6 @@
 import { Inject, Injectable, Optional } from "@nestjs/common";
 import { applyWorkflowRuntimeEventToSnapshot, type WorkflowRuntimeEvent } from "@orbit/workflow-core";
+import { assertWorkflowOutputBudget, WORKFLOW_OUTPUT_LIMITS } from "@orbit/workflow-core";
 import { SopDatabase } from "../storage/sop-database.js";
 import type { WorkflowNodeRunSnapshot, WorkflowRunSnapshot, WorkflowRunsRepository } from "./workflow-runs.types.js";
 
@@ -53,15 +54,18 @@ export class SqliteWorkflowRunsRepository implements WorkflowRunsRepository {
     this.terminalRetentionMs = options?.terminalRetentionMs ?? DEFAULT_TERMINAL_RETENTION_MS;
   }
 
-  saveRun(run: WorkflowRunSnapshot): void {
+  saveRun(run: WorkflowRunSnapshot, initiatedBy?: string): void {
+    assertWorkflowOutputBudget(run, WORKFLOW_OUTPUT_LIMITS.snapshotBytes);
+    const { issuer, tenantId } = this.storage.tenantScope();
     this.cleanupExpired();
     this.storage.database.transaction(() => {
-      const current = this.storage.database.prepare("select status from workflow_runs where id = ?").get(run.id) as { status: string } | undefined;
+      const current = this.storage.database.prepare("select status from workflow_runs where issuer = ? and tenant_id = ? and id = ?")
+        .get(issuer, tenantId, run.id) as { status: string } | undefined;
       if (current && ["succeeded", "failed", "cancelled"].includes(current.status) && current.status !== run.status) return;
       this.storage.database.prepare(`
-        insert into workflow_runs(id, workflow_id, version_id, content_hash, mode, status, input_json, output_json, error_json, node_instances_json, child_runs_json, waiting_json, created_at, started_at, finished_at)
-        values (@id, @workflowId, @versionId, @contentHash, @mode, @status, @inputs, @output, @error, @nodeInstances, @childRuns, @waiting, @createdAt, @startedAt, @finishedAt)
-        on conflict(id) do update set
+        insert into workflow_runs(issuer, tenant_id, id, workflow_id, version_id, content_hash, mode, status, input_json, output_json, error_json, node_instances_json, child_runs_json, waiting_json, created_at, started_at, finished_at, initiated_by)
+        values (@issuer, @tenantId, @id, @workflowId, @versionId, @contentHash, @mode, @status, @inputs, @output, @error, @nodeInstances, @childRuns, @waiting, @createdAt, @startedAt, @finishedAt, @initiatedBy)
+        on conflict(issuer, tenant_id, id) do update set
           status = excluded.status,
           output_json = excluded.output_json,
           error_json = excluded.error_json,
@@ -71,7 +75,10 @@ export class SqliteWorkflowRunsRepository implements WorkflowRunsRepository {
           started_at = excluded.started_at,
           finished_at = excluded.finished_at
       `).run({
+        issuer,
+        tenantId,
         id: run.id,
+        initiatedBy: initiatedBy ?? null,
         workflowId: run.workflowId,
         versionId: run.versionId ?? null,
         contentHash: run.contentHash ?? null,
@@ -91,11 +98,21 @@ export class SqliteWorkflowRunsRepository implements WorkflowRunsRepository {
     })();
   }
 
+  getInitiator(runId: string): string | null {
+    const { issuer, tenantId } = this.storage.tenantScope();
+    const row = this.storage.database.prepare("select initiated_by from workflow_runs where issuer = ? and tenant_id = ? and id = ?")
+      .get(issuer, tenantId, runId) as { initiated_by: string | null } | undefined;
+    return row?.initiated_by ?? null;
+  }
+
   getRun(runId: string): WorkflowRunSnapshot | null {
+    const { issuer, tenantId } = this.storage.tenantScope();
     this.cleanupExpired();
-    const run = this.storage.database.prepare("select * from workflow_runs where id = ?").get(runId) as RunRow | undefined;
+    const run = this.storage.database.prepare("select * from workflow_runs where issuer = ? and tenant_id = ? and id = ?")
+      .get(issuer, tenantId, runId) as RunRow | undefined;
     if (!run) return null;
-    const nodes = this.storage.database.prepare("select * from workflow_node_runs where run_id = ? order by node_id").all(runId) as NodeRunRow[];
+    const nodes = this.storage.database.prepare("select * from workflow_node_runs where issuer = ? and tenant_id = ? and run_id = ? order by node_id")
+      .all(issuer, tenantId, runId) as NodeRunRow[];
     return {
       id: run.id,
       workflowId: run.workflow_id,
@@ -128,23 +145,27 @@ export class SqliteWorkflowRunsRepository implements WorkflowRunsRepository {
 
   /** 按工作流读取近期运行投影，独立 Agent 测试也沿用同一保留期。 */
   listByWorkflow(workflowId: string, limit = 10): WorkflowRunSnapshot[] {
+    const { issuer, tenantId } = this.storage.tenantScope();
     this.cleanupExpired();
-    const rows = this.storage.database.prepare("select id from workflow_runs where workflow_id = ? order by created_at desc, rowid desc limit ?").all(workflowId, limit) as Array<{ id: string }>;
+    const rows = this.storage.database.prepare("select id from workflow_runs where issuer = ? and tenant_id = ? and workflow_id = ? order by created_at desc, rowid desc limit ?")
+      .all(issuer, tenantId, workflowId, limit) as Array<{ id: string }>;
     return rows.flatMap(({ id }) => { const run = this.getRun(id); return run ? [run] : []; });
   }
 
   saveEvent(event: WorkflowRuntimeEvent): boolean {
+    assertWorkflowOutputBudget(event, WORKFLOW_OUTPUT_LIMITS.eventBytes);
+    const { issuer, tenantId } = this.storage.tenantScope();
     this.cleanupExpired();
     return this.storage.database.transaction(() => {
       const inserted = this.storage.database.prepare(`
-        insert or ignore into workflow_events(run_id, event_id, type, event_json, created_at)
-        values (?, ?, ?, ?, ?)
-      `).run(event.runId, event.id, event.type, JSON.stringify(event), event.at);
+        insert or ignore into workflow_events(issuer, tenant_id, run_id, event_id, type, event_json, created_at)
+        values (?, ?, ?, ?, ?, ?, ?)
+      `).run(issuer, tenantId, event.runId, event.id, event.type, JSON.stringify(event), event.at);
       if (inserted.changes === 0) return false;
       const current = this.getRun(event.runId);
       if (!current) return true;
-      const newer = this.storage.database.prepare("select event_json from workflow_events where run_id = ? and event_id > ?")
-        .all(event.runId, event.id) as Array<{ event_json: string }>;
+      const newer = this.storage.database.prepare("select event_json from workflow_events where issuer = ? and tenant_id = ? and run_id = ? and event_id > ?")
+        .all(issuer, tenantId, event.runId, event.id) as Array<{ event_json: string }>;
       const later = newer.map((row) => JSON.parse(row.event_json) as WorkflowRuntimeEvent);
       const runState = (item: WorkflowRuntimeEvent) => item.type === "run.status" || item.type === "run.waiting";
       if (runState(event) && (later.some(runState) || ["succeeded", "failed", "cancelled"].includes(current.status))) return true;
@@ -167,33 +188,37 @@ export class SqliteWorkflowRunsRepository implements WorkflowRunsRepository {
   }
 
   listEvents(runId: string, sinceId = 0): WorkflowRuntimeEvent[] {
+    const { issuer, tenantId } = this.storage.tenantScope();
     this.cleanupExpired();
-    const rows = this.storage.database.prepare("select event_json from workflow_events where run_id = ? and event_id > ? order by event_id").all(runId, sinceId) as Array<{ event_json: string }>;
+    const rows = this.storage.database.prepare("select event_json from workflow_events where issuer = ? and tenant_id = ? and run_id = ? and event_id > ? order by event_id")
+      .all(issuer, tenantId, runId, sinceId) as Array<{ event_json: string }>;
     return rows.map((row) => JSON.parse(row.event_json) as WorkflowRuntimeEvent);
   }
 
   /** 按终态 retention 删除 BFF 的 run-scoped 快照投影、节点和事件。 */
   cleanupExpired(now = this.now(), terminalRetentionMs = this.terminalRetentionMs): string[] {
+    const { issuer, tenantId } = this.storage.tenantScope();
     const rows = this.storage.database.prepare(`
       select id from workflow_runs
-      where status in ('succeeded', 'failed', 'cancelled')
+      where issuer = ? and tenant_id = ? and status in ('succeeded', 'failed', 'cancelled')
         and finished_at is not null
         and finished_at <= ?
       order by id
-    `).all(now - terminalRetentionMs) as Array<{ id: string }>;
+    `).all(issuer, tenantId, now - terminalRetentionMs) as Array<{ id: string }>;
     if (rows.length === 0) return [];
     this.storage.database.transaction(() => {
-      const remove = this.storage.database.prepare("delete from workflow_runs where id = ?");
-      for (const row of rows) remove.run(row.id);
+      const remove = this.storage.database.prepare("delete from workflow_runs where issuer = ? and tenant_id = ? and id = ?");
+      for (const row of rows) remove.run(issuer, tenantId, row.id);
     })();
     return rows.map((row) => row.id);
   }
 
   private saveNode(runId: string, node: WorkflowNodeRunSnapshot): void {
+    const { issuer, tenantId } = this.storage.tenantScope();
     this.storage.database.prepare(`
-      insert into workflow_node_runs(run_id, node_id, status, attempt, input_json, output_json, error_json, started_at, finished_at, duration_ms)
-      values (@runId, @nodeId, @status, @attempt, @input, @output, @error, @startedAt, @finishedAt, @durationMs)
-      on conflict(run_id, node_id) do update set
+      insert into workflow_node_runs(issuer, tenant_id, run_id, node_id, status, attempt, input_json, output_json, error_json, started_at, finished_at, duration_ms)
+      values (@issuer, @tenantId, @runId, @nodeId, @status, @attempt, @input, @output, @error, @startedAt, @finishedAt, @durationMs)
+      on conflict(issuer, tenant_id, run_id, node_id) do update set
         status = excluded.status,
         attempt = excluded.attempt,
         input_json = excluded.input_json,
@@ -203,6 +228,8 @@ export class SqliteWorkflowRunsRepository implements WorkflowRunsRepository {
         finished_at = excluded.finished_at,
         duration_ms = excluded.duration_ms
     `).run({
+      issuer,
+      tenantId,
       runId,
       nodeId: node.nodeId,
       status: node.status,

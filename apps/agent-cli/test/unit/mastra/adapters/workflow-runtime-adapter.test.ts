@@ -1,4 +1,4 @@
-import { mkdtemp, rm } from "node:fs/promises";
+import { mkdtemp, readFile, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import {
@@ -26,6 +26,7 @@ import { WorkflowExecutorRegistry } from "../../../../src/workflows/executor-reg
 import { createBasicWorkflowExecutors } from "../../../../src/workflows/executors/basic.js";
 import { MastraWorkflowAgentNodeExecutor } from "../../../../src/mastra/workflows/agent-node-executor.js";
 import { HumanApprovalWorkflowExecutor } from "../../../../src/workflows/executors/human-approval.js";
+import { runWithServiceTenant, serviceTenantOwner } from "@orbit/service-auth";
 
 const roots: Array<{ root: string; persistenceEnabled: boolean }> = [];
 const inMemoryMastras: Mastra[] = [];
@@ -388,6 +389,17 @@ function executorRegistry(onNodeExecute?: (nodeId: string) => void, raceGate?: P
     async execute(context) {
       onNodeExecute?.(context.node.id);
       const config = context.node.config as TemplateNodeConfig;
+      if (config.template === "__oversized_output__") return { outputs: { text: "private-output-".repeat(90_000) } };
+      if (config.template === "__native_growth__") return { outputs: { text: "native-frame-".repeat(6_000) } };
+      if (config.template === "__swallowed_stream__") {
+        try {
+          for (let index = 0; index < 100; index++) context.emitDelta("stream-".repeat(4_000));
+        } catch { throw new Error("executor wrapped the stream failure"); }
+      }
+      if (config.template === "__oversized_stream__") {
+        for (let index = 0; index < 100; index++) context.emitDelta("private-stream-".repeat(2_000));
+        return { outputs: { text: "done" } };
+      }
       if (config.template === "__slow__") {
         await new Promise<void>((_resolve, reject) => {
           if (context.signal.aborted) {
@@ -429,15 +441,21 @@ async function fixture(
   }
   const registry = executorRegistry(onNodeExecute, raceGate);
   const compiler = new MastraWorkflowCompilerAdapter({ mastra, executors: registry });
+  const journal = new OrbitRuntimeEventJournal({ root, persistenceEnabled });
+  const runMappings = new MastraRunMappingRepository({ root, persistenceEnabled });
   const port = new MastraWorkflowRuntimeAdapter({
     compiler,
     root,
     persistenceEnabled,
     stageECapabilities: ENABLED_STAGE_E_CAPABILITIES,
+    journal,
+    runMappings,
   });
   return {
     root,
     port,
+    journal,
+    runMappings,
     startCommand: { workflow: workflow("done"), mode: "draft" as const },
     waitingCommand: { workflow: workflow("__suspend__"), mode: "draft" as const },
     async seedRunningRun() {
@@ -450,6 +468,179 @@ async function fixture(
 defineWorkflowRuntimePortContract("Mastra", fixture);
 
 describe("mastra/adapters/workflow-runtime-adapter", () => {
+  it("启动映射失败释放预留容量，未执行节点，随后正常请求仍可启动", async () => {
+    const executed = vi.fn();
+    const { port, runMappings } = await fixture(false, executed);
+    const original = runMappings.bind.bind(runMappings);
+    const bind = vi.spyOn(runMappings, "bind").mockRejectedValue(new Error("mapping unavailable"));
+    await runWithServiceTenant({ issuer: "issuer", tenantId: "org", subject: "alice" }, async () => {
+      for (let index = 0; index < 6; index++) {
+        await expect(port.start({ workflow: workflow("done"), mode: "draft", runId: `setup-${index}` })).rejects.toThrow("mapping unavailable");
+        expect(await port.get(`setup-${index}`)).toBeNull();
+      }
+      expect(executed).not.toHaveBeenCalled();
+      bind.mockImplementation(original);
+      const run = await port.start({ workflow: workflow("done"), mode: "draft" });
+      for await (const event of port.events({ runId: run.id })) {
+        if (event.type === "run.status" && event.status === "succeeded") break;
+      }
+      expect((await port.get(run.id))?.status).toBe("succeeded");
+    });
+  });
+
+  it("断开 waiting 订阅可结束挂起的 next 并移除 listener，不取消运行", async () => {
+    const { port, journal } = await fixture(false);
+    const run = await port.start({ workflow: workflow("__suspend__"), mode: "draft" });
+    await vi.waitFor(async () => expect((await port.get(run.id))?.status).toBe("waiting"));
+    const unsubscribe = vi.fn();
+    const subscribe = journal.subscribeWorkflow.bind(journal);
+    vi.spyOn(journal, "subscribeWorkflow").mockImplementation((id, listener) => {
+      const original = subscribe(id, listener); return () => { unsubscribe(); original(); };
+    });
+    const signal = new AbortController();
+    const iterator = port.events({ runId: run.id, sinceId: 100_000, signal: signal.signal })[Symbol.asyncIterator]();
+    const pending = iterator.next();
+    await vi.waitFor(() => expect(journal.subscribeWorkflow).toHaveBeenCalledTimes(1));
+    signal.abort();
+    expect(await pending).toMatchObject({ done: true });
+    expect(unsubscribe).toHaveBeenCalledTimes(1);
+    expect((await port.get(run.id))?.status).toBe("waiting");
+  });
+
+  it("执行器包装流式超限异常后仍不能重试或返回业务默认值", async () => {
+    const executed = vi.fn();
+    const { port } = await fixture(false, executed);
+    const source = workflow("__swallowed_stream__");
+    source.nodes.find((node) => node.id === "template")!.execution = {
+      idempotent: true, maxAttempts: 3, onError: "default", defaultOutput: { text: "fallback" },
+    };
+    const run = await port.start({ workflow: source, mode: "draft" });
+    for await (const event of port.events({ runId: run.id })) {
+      if (event.type === "run.status" && ["failed", "succeeded"].includes(event.status)) break;
+    }
+    expect(await port.get(run.id)).toMatchObject({ status: "failed", error: { code: "WORKFLOW_OUTPUT_LIMIT_EXCEEDED" } });
+    expect(executed.mock.calls.filter(([id]) => id === "template")).toHaveLength(1);
+  });
+
+  it("journal 配额用尽仍发布失败终态并结束订阅", async () => {
+    let release!: () => void;
+    const gate = new Promise<void>((resolve) => { release = resolve; });
+    const { port, journal } = await fixture(false, undefined, gate);
+    const run = await port.start({ workflow: workflow("__race__"), mode: "draft" });
+    try {
+      for (let i = 0; i <= 10_000; i++) await journal.appendWorkflow(run.id, { type: "node.log", nodeId: "template", level: "info", message: "fill" });
+    } catch (error) { expect(error).toMatchObject({ code: "WORKFLOW_OUTPUT_LIMIT_EXCEEDED" }); }
+    finally { release(); }
+    let terminal: unknown;
+    for await (const event of port.events({ runId: run.id })) {
+      if (event.type === "run.status" && ["failed", "succeeded"].includes(event.status)) terminal = event;
+    }
+    expect(terminal).toMatchObject({ status: "failed", error: { code: "WORKFLOW_OUTPUT_LIMIT_EXCEEDED" } });
+    expect(await port.get(run.id)).toMatchObject({ status: "failed", error: { code: "WORKFLOW_OUTPUT_LIMIT_EXCEEDED" } });
+  });
+
+  it.each([true, false])("多个小输出使 frame 或原生 snapshot 累积超限时，产品运行仍收敛为资源失败（持久化=%s）", async (persistenceEnabled) => {
+    const executed = vi.fn();
+    const { port } = await fixture(persistenceEnabled, executed);
+    const source = workflow("__native_growth__");
+    const template = source.nodes.find((node) => node.id === "template")!;
+    source.nodes = [source.nodes[0]!, ...Array.from({ length: 30 }, (_, index) => ({ ...template, id: `growth-${index}` })), node("end", "end", { outputs: [] })];
+    source.edges = source.nodes.slice(1).map((target, index) => ({ id: `e${index}`, source: { nodeId: source.nodes[index]!.id, portId: index === 0 ? "out" : "text" }, target: { nodeId: target.id, portId: "in" } }));
+    const run = await port.start({ workflow: source, mode: "draft" });
+    for await (const event of port.events({ runId: run.id })) {
+      if (event.type === "run.status" && ["failed", "succeeded"].includes(event.status)) {
+        expect(event.status).toBe("failed");
+        break;
+      }
+    }
+    expect(await port.get(run.id)).toMatchObject({ status: "failed", error: { code: "WORKFLOW_OUTPUT_LIMIT_EXCEEDED" } });
+    expect(executed.mock.calls.some(([id]) => id === "end")).toBe(false);
+  });
+  it("运行输出超限不会重试或走默认输出，失败终态可查询、回放并在重建后保留", async () => {
+    const executed = vi.fn();
+    const { port, root } = await fixture(true, executed);
+    const source = workflow("__oversized_output__");
+    const target = source.nodes.find((node) => node.id === "template")!;
+    target.execution = { idempotent: true, maxAttempts: 3, onError: "default", defaultOutput: { text: "fallback" } };
+    const run = await port.start({ workflow: source, mode: "draft" });
+    for await (const event of port.events({ runId: run.id })) {
+      if (event.type === "run.status" && ["failed", "succeeded"].includes(event.status)) break;
+    }
+    const snapshot = await port.get(run.id);
+    expect(snapshot).toMatchObject({ status: "failed", error: { code: "WORKFLOW_OUTPUT_LIMIT_EXCEEDED" } });
+    expect(executed.mock.calls.filter(([id]) => id === "template")).toHaveLength(1);
+    expect(JSON.stringify(snapshot)).not.toContain("private-output-");
+    const events = await new OrbitRuntimeEventJournal({ root, persistenceEnabled: true }).listWorkflow(run.id);
+    expect(events.at(-1)).toMatchObject({ type: "run.status", status: "failed", error: { code: "WORKFLOW_OUTPUT_LIMIT_EXCEEDED" } });
+    expect(events.some((event) => event.type === "run.status" && event.status === "succeeded")).toBe(false);
+    expect(JSON.stringify(events)).not.toContain("private-output-");
+    const restored = new MastraWorkflowRuntimeAdapter({ root, persistenceEnabled: true,
+      compiler: new MastraWorkflowCompilerAdapter({ mastra: (await getOrCreateMastraRuntime({ root, persistenceEnabled: true })).mastra, executors: executorRegistry() }) });
+    expect(await restored.get(run.id)).toMatchObject({ status: "failed", error: { code: "WORKFLOW_OUTPUT_LIMIT_EXCEEDED" } });
+  });
+
+  it("流式累计输出也受限，资源失败不会被正常输出覆盖", async () => {
+    const executed = vi.fn();
+    const { port } = await fixture(false, executed);
+    const run = await port.start({ workflow: workflow("__oversized_stream__"), mode: "draft" });
+    for await (const event of port.events({ runId: run.id })) {
+      if (event.type === "run.status" && ["failed", "succeeded"].includes(event.status)) break;
+    }
+    expect(await port.get(run.id)).toMatchObject({ status: "failed", error: { code: "WORKFLOW_OUTPUT_LIMIT_EXCEEDED" } });
+    expect(executed.mock.calls.filter(([id]) => id === "template")).toHaveLength(1);
+  });
+  it("直接 Runtime 调用也在执行、映射和幂等处理前拒绝超限输入与定义", async () => {
+    const executed = vi.fn();
+    const { port, startCommand } = await fixture(false, executed);
+    for (const inputs of [{ text: "中".repeat(90_000) }, [], null]) {
+      await expect(port.start({ ...startCommand, runId: "rejected", inputs: inputs as never })).rejects.toMatchObject({ code: "WORKFLOW_RESOURCE_LIMIT" });
+    }
+    await expect(port.start({ ...startCommand, runId: "rejected", workflow: { ...startCommand.workflow, metadata: { text: "中".repeat(400_000) } } })).rejects.toMatchObject({ statusCode: 413 });
+    await expect(port.resume({ runId: "rejected", resumeData: { text: "x".repeat(262_144) } })).rejects.toMatchObject({ statusCode: 413 });
+    expect(await port.get("rejected")).toBeNull();
+    expect(executed).not.toHaveBeenCalled();
+    const run = await port.start({ ...startCommand, runId: "rejected", inputs: {} });
+    expect(run.id).toBe("rejected");
+    for await (const event of port.events({ runId: run.id })) {
+      if (event.type === "run.status" && event.status === "succeeded") break;
+    }
+    expect(await port.get(run.id)).toMatchObject({ status: "succeeded" });
+  });
+  it("组织运行在异步完成和重启后保持归属，其他组织和本地调用不能读取、控制或回放", async () => {
+    const { port, root } = await fixture(true);
+    const alpha = { issuer: "https://id.example", tenantId: "org-a", subject: "user-a" };
+    const beta = { ...alpha, tenantId: "org-b" };
+    const run = await runWithServiceTenant(alpha, () => port.start({
+      workflow: workflow("__suspend__"), mode: "draft", requestContext: { ownerId: "forged" },
+    }));
+    await runWithServiceTenant(alpha, async () => {
+      for await (const event of port.events({ runId: run.id })) {
+        if (event.type === "run.status" && event.status === "waiting") break;
+      }
+    });
+    const stored = JSON.parse(await readFile(path.join(root, ".runtime/mastra/v1/mappings/workflow-runs.json"), "utf8")).records[run.id];
+    expect(stored).toMatchObject({ tenant: alpha, ownerId: serviceTenantOwner(alpha) });
+    await shutdownMastraRuntime({ root, persistenceEnabled: true });
+    const restored = (await getOrCreateMastraRuntime({ root, persistenceEnabled: true })).mastra;
+    const reopened = new MastraWorkflowRuntimeAdapter({
+      root, persistenceEnabled: true,
+      compiler: new MastraWorkflowCompilerAdapter({ mastra: restored, executors: executorRegistry() }),
+    });
+    for (const identity of [beta, { ...alpha, issuer: "https://other.example" }]) {
+      await runWithServiceTenant(identity, async () => {
+        expect(await reopened.get(run.id)).toBeNull();
+        await expect(reopened.cancel({ runId: run.id })).rejects.toMatchObject({ code: "RUNTIME_NOT_FOUND" });
+        await expect(reopened.resume({ runId: run.id, resumeData: {} })).rejects.toMatchObject({ code: "RUNTIME_NOT_FOUND" });
+        await expect(reopened.events({ runId: run.id })[Symbol.asyncIterator]().next()).rejects.toMatchObject({ code: "RUNTIME_NOT_FOUND" });
+      });
+    }
+    expect(await reopened.get(run.id)).toBeNull();
+    await runWithServiceTenant({ ...alpha, subject: "colleague" }, async () => {
+      expect(await reopened.get(run.id)).toMatchObject({ status: "waiting" });
+      const resumed = await reopened.resume({ runId: run.id, stepId: "template", resumeData: { value: "approved" } });
+      expect(resumed.status).toBe("succeeded");
+    });
+  });
   it("默认开放已验证阶段 E 能力，并在编译前拒绝 Parallel/Merge", async () => {
     const root = await mkdtemp(path.join(tmpdir(), "orbit-mastra-workflow-capabilities-"));
     roots.push({ root, persistenceEnabled: false });
@@ -606,27 +797,32 @@ describe("mastra/adapters/workflow-runtime-adapter", () => {
       persistenceEnabled: false,
       stageECapabilities: ENABLED_STAGE_E_CAPABILITIES,
     });
-    const started = await port.start({
-      workflow: humanApprovalWorkflow({ deadlineMs: 35, timeoutPolicy: "fail" }),
-      approvalPolicyIds: ["policy-1"],
-      mode: "draft",
-    });
-    const waitingDeadline = Date.now() + 1_000;
-    let waiting = await port.get(started.id);
-    while (waiting?.status === "running" && Date.now() <= waitingDeadline) {
-      await new Promise((resolve) => setTimeout(resolve, 5));
-      waiting = await port.get(started.id);
-    }
-    expect(waiting?.status).toBe("waiting");
-    await new Promise((resolve) => setTimeout(resolve, 45));
+    // 仅控制业务时钟，保留真实异步调度，避免高负载下提前跨过审批期限。
+    const clock = vi.spyOn(Date, "now").mockReturnValue(Date.now());
+    try {
+      const started = await port.start({
+        workflow: humanApprovalWorkflow({ deadlineMs: 35, timeoutPolicy: "fail" }),
+        approvalPolicyIds: ["policy-1"],
+        mode: "draft",
+      });
+      let waiting = await port.get(started.id);
+      for (let attempt = 0; waiting?.status === "running" && attempt < 200; attempt += 1) {
+        await new Promise((resolve) => setTimeout(resolve, 5));
+        waiting = await port.get(started.id);
+      }
+      expect(waiting?.status).toBe("waiting");
+      clock.mockReturnValue(waiting!.waiting!.waiting!.deadline + 1);
 
-    await expect(port.get(started.id)).resolves.toMatchObject({
-      status: "failed",
-      error: { code: "APPROVAL_TIMEOUT" },
-    });
-    const replayed = [];
-    for await (const event of port.events({ runId: started.id, sinceId: 0 })) replayed.push(event);
-    expect(replayed.at(-1)).toMatchObject({ type: "run.status", status: "failed" });
+      await expect(port.get(started.id)).resolves.toMatchObject({
+        status: "failed",
+        error: { code: "APPROVAL_TIMEOUT" },
+      });
+      const replayed = [];
+      for await (const event of port.events({ runId: started.id, sinceId: 0 })) replayed.push(event);
+      expect(replayed.at(-1)).toMatchObject({ type: "run.status", status: "failed" });
+    } finally {
+      clock.mockRestore();
+    }
   });
 
   it("reject 决定恢复同一个 Mastra run 并进入 rejected 分支", async () => {

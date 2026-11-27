@@ -5,7 +5,7 @@ import { errorPayload, markSaasResponse, writeJson } from "../http/http-utils.js
 import type { IdentityConfig } from "./identity-config.js";
 import { verifiedIdentityFromClaims, type VerifiedIdentity } from "./organization-claims.js";
 import { SqliteSessionStore } from "./sqlite-session-store.js";
-import { runWithTenant } from "./tenant-context.js";
+import { runWithOrganizationAuthorization } from "./organization-authorization.js";
 
 type AuthenticatedRequest = Request & { orbit_session: { orbitIdentity?: VerifiedIdentity } };
 
@@ -79,7 +79,7 @@ export function createIdentityHttp(config: Extract<IdentityConfig, { mode: "saas
         return;
       }
     }
-    runWithTenant({ issuer: identity.issuer, tenantId: identity.selectedTenantId, subject: identity.subject }, next);
+    runWithOrganizationAuthorization(identity, next);
   };
 
   const headers = (_req: Request, res: Response, next: NextFunction) => {

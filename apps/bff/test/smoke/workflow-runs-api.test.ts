@@ -170,6 +170,20 @@ afterEach(async () => {
 });
 
 describe("workflow-runs API smoke", () => {
+  it("BFF 将 Agent 容量拒绝原样返回 429 和 Retry-After，不返回伪造运行", async () => {
+    const upstream = await listen(createServer((_req, res) => {
+      res.setHeader("Retry-After", "60");
+      json(res, 429, { ok: false, error: { code: "WORKFLOW_CONCURRENCY_LIMIT", message: "capacity exhausted" } });
+    }));
+    const base = await startBff(upstream);
+    const draft = createTestDraft("quota-propagation");
+    expect((await request(base, "/api/sops", "POST", { draft })).status).toBe(201);
+    const response = await request(base, "/api/workflow-runs", "POST", { workflowId: draft.id, mode: "draft" });
+    expect(response.status).toBe(429);
+    expect(response.headers.get("retry-after")).toBe("60");
+    expect(await response.json()).toMatchObject({ ok: false, error: { code: "WORKFLOW_CONCURRENCY_LIMIT" } });
+  });
+
   it("区分草稿和发布运行，转发可续传 SSE，并传播取消", async () => {
     const baseUrl = await startBff(await startMockAgent());
     const draft = createTestDraft("workflow-run-api");
@@ -355,6 +369,8 @@ describe("workflow-runs API smoke", () => {
     nestedApprovalConfig.policyId = "policy-security-review";
     const iterationDefinition = builtinNodeRegistry.get("iteration")!;
     const iterationConfig = iterationDefinition.createDefaultConfig();
+    // 本用例验证策略提取；为外围节点留出既有 1,000 步预算。
+    iterationConfig.maxItems = 10;
     iterationConfig.body.nodes = [{
       kind: "builtin",
       id: "nested-approval",

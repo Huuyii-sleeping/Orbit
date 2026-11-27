@@ -1,22 +1,3 @@
-import { AsyncLocalStorage } from "node:async_hooks";
-
-/** 已通过 OIDC 认证并通过成员资格校验的请求身份；禁止由请求参数直接创建。 */
-export interface TenantContext {
-  readonly issuer: string;
-  readonly tenantId: string;
-  readonly subject: string;
-}
-
-const context = new AsyncLocalStorage<Readonly<TenantContext>>();
-
-/** 在独立异步请求链上运行；快照避免租户选择影响仍在执行的旧请求。 */
-export function runWithTenant<T>(identity: TenantContext, operation: () => T): T {
-  return context.run(Object.freeze({ ...identity }), operation);
-}
-
-/** SaaS 存储必须显式要求上下文，缺失时禁止读取本地全局数据。 */
-export function requireTenantContext(): Readonly<TenantContext> {
-  const current = context.getStore();
-  if (!current) throw new Error("Trusted tenant context is required");
-  return current;
-}
+/** BFF 和 Runtime 共用已验证身份的异步上下文，浏览器参数不得建立此上下文。 */
+export { runWithServiceTenant as runWithTenant, requireServiceTenant as requireTenantContext } from "@orbit/service-auth";
+export type { ServiceTenantIdentity as TenantContext } from "@orbit/service-auth";

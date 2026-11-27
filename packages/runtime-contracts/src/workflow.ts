@@ -43,6 +43,8 @@ export type CancelWorkflowRunCommand = {
 export type WorkflowRuntimeEventQuery = {
   runId: string;
   sinceId?: number;
+  /** 取消订阅并释放观察资源，不取消工作流执行。 */
+  signal?: AbortSignal;
 };
 
 /** 恢复 waiting/suspended Workflow run。 */

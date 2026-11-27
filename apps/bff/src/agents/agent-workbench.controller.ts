@@ -1,3 +1,5 @@
+import { OrganizationAuthorizationError } from "../identity/organization-authorization.js";
+import { WorkflowResourceLimitError } from "@orbit/workflow-core";
 import {
   Body,
   Controller,
@@ -51,7 +53,7 @@ export class AgentWorkbenchController {
     try {
       writeJson(res, 200, await action());
     } catch (error) {
-      if (error instanceof WorkflowRunControlError)
+      if (error instanceof WorkflowRunControlError || error instanceof OrganizationAuthorizationError || error instanceof WorkflowResourceLimitError)
         writeJson(
           res,
           error.statusCode,

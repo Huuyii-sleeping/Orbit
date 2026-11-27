@@ -3,6 +3,7 @@ import type {
   WorkflowIR,
   WorkflowIRNode,
 } from "@orbit/workflow-core";
+import { assertWorkflowOutputBudget, isWorkflowOutputLimitError, WORKFLOW_OUTPUT_LIMITS, WorkflowOutputLimitError } from "@orbit/workflow-core";
 import { z } from "zod";
 import { createStep, type OutputWriter, type Step } from "@mastra/core/workflows";
 import { assertWorkflowValueType, WorkflowVariableContext } from "../../workflows/context.js";
@@ -94,6 +95,9 @@ export const MASTRA_WORKFLOW_FRAME_SCHEMA = z.object({
   selectedPorts: z.record(z.array(z.string())),
   skippedNodeIds: z.array(z.string()),
   output: z.record(z.unknown()).optional(),
+}).transform((frame) => {
+  assertWorkflowOutputBudget(frame, WORKFLOW_OUTPUT_LIMITS.frameBytes);
+  return frame;
 });
 
 /** typed step 通过 Mastra outputWriter 发送给 Adapter 的内部产品事件。 */
@@ -260,10 +264,17 @@ async function executeNode(
     ...(frame.childRunId === undefined ? {} : { childRunId: frame.childRunId }),
   };
   let lastError: unknown;
+  let streamedBytes = 0;
+  let resourceFailure: unknown;
   for (let attempt = 1; attempt <= maxAttempts; attempt += 1) {
     let outputFailure: unknown;
     let pendingOutput = Promise.resolve();
     const emit = (payload: OrbitWorkflowNodeOutputEvent["payload"]): void => {
+      if (resourceFailure) throw resourceFailure;
+      try {
+        streamedBytes += assertWorkflowOutputBudget(payload, WORKFLOW_OUTPUT_LIMITS.eventBytes);
+        if (streamedBytes > WORKFLOW_OUTPUT_LIMITS.streamBytes) throw new WorkflowOutputLimitError();
+      } catch (error) { resourceFailure = error; throw error; }
       if (!outputWriter) return;
       pendingOutput = pendingOutput
         .then(() => outputWriter({ type: "orbit-workflow-node-event", payload } satisfies OrbitWorkflowNodeOutputEvent))
@@ -307,10 +318,13 @@ async function executeNode(
         }),
       }), node.execution.timeoutMs, signal);
       await flushOutput();
+      if (resourceFailure) throw resourceFailure;
       if (result.suspend) {
+        if (result.suspend.payload !== undefined) assertWorkflowOutputBudget(result.suspend.payload, Math.min(ir.resourceBudget.limits.maxOutputBytes, WORKFLOW_OUTPUT_LIMITS.nodeBytes));
         if (!suspend) throw new Error(`节点 ${node.id} 请求暂停，但 Mastra suspend 不可用。`);
         return suspend(result.suspend.payload, { resumeLabel: node.id });
       }
+      assertWorkflowOutputBudget(result.outputs, Math.min(ir.resourceBudget.limits.maxOutputBytes, WORKFLOW_OUTPUT_LIMITS.nodeBytes));
       for (const port of node.ports.outputs) {
         if (result.outputs[port.id] !== undefined) {
           assertWorkflowValueType(`${node.id}.${port.id}`, port.dataType, result.outputs[port.id]);
@@ -333,13 +347,17 @@ async function executeNode(
       } catch (outputError) {
         executionError = outputError;
       }
+      // 执行器可能包装 emit 抛出的错误，资源失败一旦发生就不能被业务错误覆盖。
+      if (resourceFailure) throw resourceFailure;
       if (signal.aborted) throw executionError;
+      if (isWorkflowOutputLimitError(executionError)) throw executionError;
       lastError = executionError;
       if (attempt < maxAttempts) await delay(node.execution.retryBackoffMs, signal);
     }
   }
   if (node.execution.onError === "default") {
     const outputs = node.execution.defaultOutput ?? {};
+    assertWorkflowOutputBudget(outputs, Math.min(ir.resourceBudget.limits.maxOutputBytes, WORKFLOW_OUTPUT_LIMITS.nodeBytes));
     return {
       ...frame,
       nodeOutputs: { ...frame.nodeOutputs, [node.id]: outputs },
@@ -349,6 +367,7 @@ async function executeNode(
   }
   if (node.execution.onError === "route" && node.execution.errorPortId) {
     const error = lastError instanceof Error ? lastError.message : String(lastError);
+    assertWorkflowOutputBudget({ error }, Math.min(ir.resourceBudget.limits.maxOutputBytes, WORKFLOW_OUTPUT_LIMITS.nodeBytes));
     return {
       ...frame,
       nodeOutputs: { ...frame.nodeOutputs, [node.id]: { error } },

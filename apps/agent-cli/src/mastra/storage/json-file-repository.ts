@@ -18,8 +18,11 @@ export class JsonFileRepository<T> {
       this.value = this.initialValue();
       return structuredClone(this.value);
     }
-    const raw = await readFile(this.filePath, "utf8").catch(() => "");
-    this.value = raw.trim() ? JSON.parse(raw) as T : this.initialValue();
+    const raw = await readFile(this.filePath, "utf8").catch((error: NodeJS.ErrnoException) => {
+      if (error.code === "ENOENT") return null;
+      throw error;
+    });
+    this.value = raw === null ? this.initialValue() : JSON.parse(raw) as T;
     return structuredClone(this.value);
   }
 
@@ -40,8 +43,10 @@ export class JsonFileRepository<T> {
   private async write(value: T): Promise<void> {
     await mkdir(path.dirname(this.filePath), { recursive: true });
     const temp = `${this.filePath}.${process.pid}.${Date.now()}.tmp`;
-    await writeFile(temp, `${JSON.stringify(value, null, 2)}\n`, "utf8");
-    await rm(this.filePath, { force: true }).catch(() => undefined);
-    await rename(temp, this.filePath);
+    try {
+      await writeFile(temp, `${JSON.stringify(value, null, 2)}\n`, "utf8");
+      // rename 原子替换旧记录；先删除旧文件会留下重启时误读为空仓库的窗口。
+      await rename(temp, this.filePath);
+    } finally { await rm(temp, { force: true }); }
   }
 }

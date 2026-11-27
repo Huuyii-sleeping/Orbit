@@ -2,6 +2,14 @@ import { describe, expect, it } from "vitest";
 import { WorkflowSseDecoder } from "../../../src/workflow-runs/sse-decoder.js";
 
 describe("WorkflowSseDecoder", () => {
+  it("无分隔符的半包也有上限，超大完整事件在解析和持久化之前拒绝", () => {
+    const decoder = new WorkflowSseDecoder();
+    expect(decoder.push('data: {"text":"')).toEqual([]);
+    expect(() => decoder.push("中".repeat(400_000))).toThrowError(expect.objectContaining({ code: "WORKFLOW_OUTPUT_LIMIT_EXCEEDED" }));
+    const complete = `data: ${JSON.stringify({ id: 1, at: 1, runId: "run", type: "node.output", nodeId: "n", output: { text: "中".repeat(400_000) } })}\n\n`;
+    expect(() => new WorkflowSseDecoder().push(complete)).toThrowError(expect.objectContaining({ code: "WORKFLOW_OUTPUT_LIMIT_EXCEEDED" }));
+    expect(() => WorkflowSseDecoder.runtimeEvent(complete)).toThrowError(expect.objectContaining({ code: "WORKFLOW_OUTPUT_LIMIT_EXCEEDED" }));
+  });
   it("跨网络分片保留完整事件 frame", () => {
     const decoder = new WorkflowSseDecoder();
     expect(decoder.push("id: 1\nevent: run.status\nda")).toEqual([]);

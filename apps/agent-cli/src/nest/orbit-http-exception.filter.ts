@@ -9,6 +9,14 @@ export class OrbitHttpExceptionFilter implements ExceptionFilter {
     const req = context.getRequest<IncomingMessage>();
     const res = context.getResponse<ServerResponse>();
     if (res.headersSent) return;
+    const bodyError = error && typeof error === "object" && "type" in error ? error.type : undefined;
+    const bodyStatus = bodyError === "entity.too.large" ? 413 : bodyError === "encoding.unsupported" ? 415 : bodyError === "entity.parse.failed" ? 400 : undefined;
+    if (bodyStatus) {
+      writeJson(res, bodyStatus, { ok: false, error: {
+        code: bodyStatus === 413 ? "REQUEST_BODY_TOO_LARGE" : "INVALID_REQUEST_BODY", message: "Request body rejected",
+      } });
+      return;
+    }
     const statusCode = error instanceof HttpException ? error.getStatus() : 500;
     const pathname = req.url ? new URL(req.url, "http://127.0.0.1").pathname : "/";
     if (statusCode === 404) {

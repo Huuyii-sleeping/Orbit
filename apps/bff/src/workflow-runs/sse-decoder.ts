@@ -1,4 +1,5 @@
 import type { WorkflowRuntimeEvent } from "@orbit/workflow-core";
+import { assertWorkflowOutputBudget, WORKFLOW_OUTPUT_LIMITS, WorkflowOutputLimitError } from "@orbit/workflow-core";
 
 const workflowRunStatuses = new Set(["queued", "running", "waiting", "succeeded", "failed", "cancelled"]);
 const workflowNodeStatuses = new Set(["pending", "ready", "running", "waiting", "succeeded", "failed", "skipped", "cancelled"]);
@@ -40,9 +41,11 @@ export class WorkflowSseDecoder {
     while (true) {
       const boundary = this.buffer.indexOf("\n\n");
       if (boundary < 0) break;
+      if (Buffer.byteLength(this.buffer.slice(0, boundary + 2), "utf8") > WORKFLOW_OUTPUT_LIMITS.eventBytes + 4_096) throw new WorkflowOutputLimitError();
       frames.push(this.buffer.slice(0, boundary + 2));
       this.buffer = this.buffer.slice(boundary + 2);
     }
+    if (Buffer.byteLength(this.buffer, "utf8") > WORKFLOW_OUTPUT_LIMITS.eventBytes + 4_096) throw new WorkflowOutputLimitError();
     return frames;
   }
 
@@ -55,6 +58,7 @@ export class WorkflowSseDecoder {
   /** 只接受当前产品协议事件；未知新事件由 BFF 跳过但不阻断后续 frame。 */
   static runtimeEvent(frame: string): WorkflowRuntimeEvent | undefined {
     const value = WorkflowSseDecoder.event(frame);
+    if (value !== undefined) assertWorkflowOutputBudget(value, WORKFLOW_OUTPUT_LIMITS.eventBytes);
     if (!isRecord(value) || !hasEventBase(value) || typeof value.type !== "string") return undefined;
     if (value.type === "run.status") {
       return workflowRunStatuses.has(String(value.status)) ? value as WorkflowRuntimeEvent : undefined;

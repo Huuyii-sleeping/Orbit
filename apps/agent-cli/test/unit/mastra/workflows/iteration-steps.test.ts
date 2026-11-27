@@ -1,5 +1,5 @@
 import { createStep, createWorkflow } from "@mastra/core/workflows";
-import { builtinNodeRegistry, type WorkflowIRIterationNode } from "@orbit/workflow-core";
+import { builtinNodeRegistry, WORKFLOW_OUTPUT_LIMITS, type WorkflowIRIterationNode } from "@orbit/workflow-core";
 import { describe, expect, it, vi } from "vitest";
 import {
   MASTRA_ITERATION_DESCRIPTOR_SCHEMA,
@@ -34,6 +34,29 @@ function iterationNode(): WorkflowIRIterationNode {
 }
 
 describe("iteration steps", () => {
+  it("聚合字段的 JSON 包装也计入完整节点输出预算", () => {
+    const node = iterationNode();
+    node.config.aggregation = "ordered";
+    const frame = createMastraWorkflowFrame({ productRunId: "budget" });
+    const output = "x".repeat(WORKFLOW_OUTPUT_LIMITS.nodeBytes - 4);
+    expect(Buffer.byteLength(JSON.stringify([output]))).toBe(WORKFLOW_OUTPUT_LIMITS.nodeBytes);
+    expect(() => mergeIterationResults(node, frame, [{ index: 0, instanceId: "0", status: "succeeded", output, frame }])).toThrowError(expect.objectContaining({ code: "WORKFLOW_OUTPUT_LIMIT_EXCEEDED" }));
+  });
+
+  it("每项未超限但聚合超限时失败，collect-errors 不能吞掉资源失败", () => {
+    const node = iterationNode();
+    const frame = createMastraWorkflowFrame({ productRunId: "budget" });
+    const results = Array.from({ length: 3 }, (_, index) => ({ index, instanceId: String(index), status: "succeeded" as const, output: "中".repeat(120_000), frame }));
+    expect(() => mergeIterationResults(node, frame, results)).toThrowError(expect.objectContaining({ code: "WORKFLOW_OUTPUT_LIMIT_EXCEEDED" }));
+    node.config.failurePolicy = "collect-errors";
+    expect(() => mergeIterationResults(node, frame, [{ index: 0, instanceId: "0", status: "failed", error: { code: "WORKFLOW_OUTPUT_LIMIT_EXCEEDED", message: "budget" }, frame }])).toThrowError(expect.objectContaining({ code: "WORKFLOW_OUTPUT_LIMIT_EXCEEDED" }));
+  });
+
+  it("foreach 描述符和结果列表中的 frame 副本共同计入预算", () => {
+    const frame = createMastraWorkflowFrame({ productRunId: "budget", workflowInputs: { text: "x".repeat(220_000) } });
+    const results = Array.from({ length: 10 }, (_, index) => ({ index, instanceId: String(index), status: "succeeded" as const, output: "ok", frame }));
+    expect(() => MASTRA_ITERATION_RESULTS_SCHEMA.parse(results)).toThrowError(expect.objectContaining({ code: "WORKFLOW_OUTPUT_LIMIT_EXCEEDED" }));
+  });
   it("prepare 在启动 body 前校验数组上限并派生稳定 item/index identity", async () => {
     const node = iterationNode();
     const frame = createMastraWorkflowFrame({ productRunId: "run-iteration", executionPath: ["root"] });

@@ -4,6 +4,7 @@ import { join } from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
 import { SopDatabase } from "../../../src/storage/sop-database.js";
 import { SqliteWorkflowRunsRepository } from "../../../src/workflow-runs/sqlite-workflow-runs.repository.js";
+import { runWithTenant } from "../../../src/identity/tenant-context.js";
 import type { WorkflowRunSnapshot } from "../../../src/workflow-runs/workflow-runs.types.js";
 
 const roots: string[] = [];
@@ -12,10 +13,10 @@ afterEach(async () => {
   await Promise.all(roots.splice(0).map((root) => rm(root, { recursive: true, force: true })));
 });
 
-async function createRepository() {
+async function createRepository(requireTenantContext = false) {
   const root = await mkdtemp(join(tmpdir(), "orbit-workflow-runs-"));
   roots.push(root);
-  const database = new SopDatabase({ sopDataRoot: root });
+  const database = new SopDatabase({ sopDataRoot: root, requireTenantContext });
   return { database, repository: new SqliteWorkflowRunsRepository(database, { now: () => 50 }) };
 }
 
@@ -34,6 +35,64 @@ function queuedRun(): WorkflowRunSnapshot {
 }
 
 describe("SqliteWorkflowRunsRepository", () => {
+  it("超限快照和事件不落库，累计投影超限回滚，资源失败后旧输出不会重新灌入", async () => {
+    const { database, repository } = await createRepository();
+    try {
+      const run = { ...queuedRun(), status: "running" as const };
+      repository.saveRun(run);
+      expect(() => repository.saveRun({ ...run, output: { text: "x".repeat(4_194_304) } })).toThrowError(expect.objectContaining({ code: "WORKFLOW_OUTPUT_LIMIT_EXCEEDED" }));
+      expect(repository.getRun(run.id)?.output).toBeUndefined();
+      expect(() => repository.saveEvent({ id: 1, runId: run.id, at: 10, type: "node.output", nodeId: "node1", output: { text: "x".repeat(1_114_112) } })).toThrowError(expect.objectContaining({ code: "WORKFLOW_OUTPUT_LIMIT_EXCEEDED" }));
+      expect(repository.listEvents(run.id)).toEqual([]);
+      repository.saveRun({ ...run, output: { text: "x".repeat(3_300_000) } });
+      expect(() => repository.saveEvent({ id: 2, runId: run.id, at: 20, type: "node.output", nodeId: "node1", output: { text: "x".repeat(950_000) } })).toThrowError(expect.objectContaining({ code: "WORKFLOW_OUTPUT_LIMIT_EXCEEDED" }));
+      expect(repository.listEvents(run.id)).toEqual([]);
+      expect(repository.getRun(run.id)?.nodeRuns.node1.output).toBeUndefined();
+      repository.saveEvent({ id: 3, runId: run.id, at: 30, type: "run.status", status: "failed", error: { code: "WORKFLOW_OUTPUT_LIMIT_EXCEEDED", message: "resource failure" } });
+      repository.saveEvent({ id: 1, runId: run.id, at: 10, type: "node.output", nodeId: "node1", output: { text: "old output" } });
+      expect(repository.getRun(run.id)).toMatchObject({ status: "failed" });
+      expect(repository.getRun(run.id)?.output).toBeUndefined();
+      expect(repository.getRun(run.id)?.nodeRuns.node1.output).toBeUndefined();
+    } finally { database.onModuleDestroy(); }
+  });
+
+  it("同名运行、节点和事件按租户隔离，旧本地记录不可见", async () => {
+    const { database, repository } = await createRepository(true);
+    const tenantA = { issuer: "issuer", tenantId: "tenant-a", subject: "user-a" };
+    const tenantB = { issuer: "issuer", tenantId: "tenant-b", subject: "user-b" };
+    const colleague = { ...tenantA, subject: "user-c" };
+    try {
+      database.database.prepare(`insert into workflow_runs(id, workflow_id, mode, status, input_json, created_at)
+        values ('run-1', 'workflow-1', 'draft', 'succeeded', '{}', 1)`).run();
+      expect(() => repository.getRun("run-1")).toThrow("Trusted tenant context");
+      runWithTenant(tenantA, () => {
+        repository.saveRun(queuedRun());
+        expect(repository.saveEvent({ id: 1, runId: "run-1", at: 20, type: "run.status", status: "running" })).toBe(true);
+      });
+      runWithTenant(tenantB, () => {
+        expect(repository.getRun("run-1")).toBeNull();
+        expect(repository.listEvents("run-1")).toEqual([]);
+        repository.saveRun({ ...queuedRun(), inputs: { question: "tenant-b" } });
+        expect(repository.saveEvent({ id: 1, runId: "run-1", at: 30, type: "run.status", status: "waiting" })).toBe(true);
+        expect(repository.getRun("run-1")?.inputs).toEqual({ question: "tenant-b" });
+      });
+      runWithTenant(tenantA, () => {
+        expect(repository.getRun("run-1")?.inputs).toEqual({ question: "hello" });
+        expect(repository.getRun("run-1")?.status).toBe("running");
+        expect(repository.listEvents("run-1").map((event) => event.at)).toEqual([20]);
+      });
+      runWithTenant(colleague, () => expect(repository.getRun("run-1")?.status).toBe("running"));
+      expect(database.database.prepare("select count(*) as total from workflow_runs where id = 'run-1'").get())
+        .toEqual({ total: 3 });
+      runWithTenant(tenantA, () => {
+        repository.saveRun({ ...queuedRun(), status: "succeeded", finishedAt: 100 });
+        expect(repository.cleanupExpired(250, 100)).toEqual(["run-1"]);
+      });
+      runWithTenant(tenantB, () => expect(repository.getRun("run-1")?.inputs).toEqual({ question: "tenant-b" }));
+      expect(database.database.prepare("select count(*) as total from workflow_runs where id = 'run-1'").get())
+        .toEqual({ total: 2 });
+    } finally { database.onModuleDestroy(); }
+  });
   it("保存运行、节点 attempt 和有序事件，并按事件 id 去重", async () => {
     const { database, repository } = await createRepository();
     try {

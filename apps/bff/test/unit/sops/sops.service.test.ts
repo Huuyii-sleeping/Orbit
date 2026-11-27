@@ -1,3 +1,4 @@
+import { OrganizationOperationsService } from "../../../src/identity/organization-operations.service.js";
 import { mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
@@ -34,7 +35,7 @@ async function setup(stageECapabilities: WorkflowStageECapabilityRegistry = DEFA
   return {
     database,
     agentVersions,
-    service: new SopsService(repository, database, agentVersions, stageECapabilities),
+    service: new SopsService(repository, database, new OrganizationOperationsService(database), agentVersions, stageECapabilities),
   };
 }
 

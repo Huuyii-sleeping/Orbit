@@ -1,5 +1,6 @@
 import { createHash } from "node:crypto";
-import { appendFile, mkdir, readFile, rm } from "node:fs/promises";
+import { appendFile, mkdir, readFile, rm, stat } from "node:fs/promises";
+import { assertWorkflowOutputBudget, isWorkflowOutputLimitError, WORKFLOW_OUTPUT_LIMITS, WorkflowOutputLimitError } from "@orbit/workflow-core";
 import path from "node:path";
 import type {
   AgentRuntimeEvent,
@@ -21,6 +22,8 @@ type JournalState = {
   loaded: boolean;
   events: RuntimeJournalEvent[];
   pending: Promise<void>;
+  bytes: number;
+  exhausted: boolean;
 };
 
 function journalKey(domain: RuntimeEventDomain, runId: string): string {
@@ -92,12 +95,32 @@ export class OrbitRuntimeEventJournal {
         runId,
         at: Date.now(),
       } as RuntimeJournalEvent;
+      let bytes = 0;
+      if (domain === "workflow") {
+        const terminalFailure = event.type === "run.status" && event.status === "failed" && isWorkflowOutputLimitError("error" in event ? event.error : undefined);
+        const last = state.events.at(-1);
+        if (terminalFailure && last?.type === "run.status" && last.status === "failed" && isWorkflowOutputLimitError("error" in last ? last.error : undefined)) {
+          appended = last;
+          return;
+        }
+        try {
+          bytes = assertWorkflowOutputBudget(event, terminalFailure ? 1_024 : WORKFLOW_OUTPUT_LIMITS.eventBytes) + 1;
+          // 为固定的资源失败终态保留一个事件；恢复和并发 append 共用串行计数。
+          if (!terminalFailure && (state.exhausted || state.bytes + bytes > WORKFLOW_OUTPUT_LIMITS.journalBytes
+            || state.events.length >= WORKFLOW_OUTPUT_LIMITS.journalEvents)) throw new WorkflowOutputLimitError();
+        } catch (error) {
+          if (isWorkflowOutputLimitError(error)) state.exhausted = true;
+          throw error;
+        }
+      }
       if (this.persistenceEnabled) {
         const filePath = this.filePath(domain, runId);
         await mkdir(path.dirname(filePath), { recursive: true });
         await appendFile(filePath, `${JSON.stringify(event)}\n`, "utf8");
       }
       state.events.push(event);
+      state.bytes += bytes;
+      if (event.type === "run.status" && event.status === "failed" && isWorkflowOutputLimitError("error" in event ? event.error : undefined)) state.exhausted = true;
       appended = event;
       for (const subscriber of this.subscribers.get(journalKey(domain, runId)) ?? []) subscriber(event);
     });
@@ -132,17 +155,26 @@ export class OrbitRuntimeEventJournal {
     const key = journalKey(domain, runId);
     const current = this.states.get(key);
     if (current) return current;
-    const created: JournalState = { loaded: false, events: [], pending: Promise.resolve() };
+    const created: JournalState = { loaded: false, events: [], pending: Promise.resolve(), bytes: 0, exhausted: false };
     this.states.set(key, created);
     return created;
   }
 
   private async load(domain: RuntimeEventDomain, runId: string, state: JournalState): Promise<void> {
     if (state.loaded) return;
-    state.loaded = true;
-    if (!this.persistenceEnabled) return;
-    const raw = await readFile(this.filePath(domain, runId), "utf8").catch(() => "");
+    if (!this.persistenceEnabled) { state.loaded = true; return; }
+    const filePath = this.filePath(domain, runId);
+    const size = await stat(filePath).then((info) => info.size, (error: NodeJS.ErrnoException) => {
+      if (error.code === "ENOENT") return 0;
+      throw error;
+    });
+    if (domain === "workflow" && size > WORKFLOW_OUTPUT_LIMITS.journalBytes + 1_025) throw new WorkflowOutputLimitError();
+    const raw = size === 0 ? "" : await readFile(filePath, "utf8");
     state.events = raw.split(/\r?\n/).filter(Boolean).map((line) => JSON.parse(line) as RuntimeJournalEvent);
+    state.bytes = Buffer.byteLength(raw, "utf8");
+    state.exhausted = state.events.some((event) => event.type === "run.status" && event.status === "failed" && isWorkflowOutputLimitError("error" in event ? event.error : undefined));
+    if (domain === "workflow" && state.events.length > WORKFLOW_OUTPUT_LIMITS.journalEvents + 1) throw new WorkflowOutputLimitError();
+    state.loaded = true;
   }
 
   private filePath(domain: RuntimeEventDomain, runId: string): string {

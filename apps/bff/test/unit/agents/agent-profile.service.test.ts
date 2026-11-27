@@ -4,15 +4,23 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { LocalStoreService } from "../../../src/storage/local-store.service.js";
 import { AgentProfileService, normalizeAgentProfile } from "../../../src/agents/agent-profile.service.js";
+import { AgentProfileRepository } from "../../../src/agents/agent-profile.repository.js";
+import { SopDatabase } from "../../../src/storage/sop-database.js";
 
 const roots: string[] = [];
-afterEach(() => roots.splice(0).forEach((root) => rmSync(root, { recursive: true, force: true })));
+const databases: SopDatabase[] = [];
+afterEach(() => {
+  databases.splice(0).forEach((database) => database.onModuleDestroy());
+  roots.splice(0).forEach((root) => rmSync(root, { recursive: true, force: true }));
+});
 
 function setup() {
   const root = mkdtempSync(join(tmpdir(), "orbit-agent-profile-test-"));
   roots.push(root);
   const store = new LocalStoreService({ filePath: join(root, "business.json") });
-  return new AgentProfileService(store, { listSkills: vi.fn(async () => []) });
+  const database = new SopDatabase({ sopDataRoot: root });
+  databases.push(database);
+  return new AgentProfileService(new AgentProfileRepository(store, database), { listSkills: vi.fn(async () => []) });
 }
 
 describe("Agent 创建表单", () => {

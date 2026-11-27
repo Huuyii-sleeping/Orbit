@@ -1,4 +1,5 @@
 import { createHash, randomUUID } from "node:crypto";
+import { currentServiceTenant, matchesServiceTenant, serviceTenantOwner } from "@orbit/service-auth";
 import {
   RuntimePortError,
   type CancelWorkflowRunCommand,
@@ -9,6 +10,13 @@ import {
   type WorkflowRuntimePort,
 } from "@orbit/runtime-contracts";
 import {
+  assertWorkflowDefinitionBudget,
+  assertWorkflowOutputBudget,
+  isWorkflowOutputLimitError,
+  WORKFLOW_OUTPUT_LIMITS,
+  assertWorkflowInputBudget,
+  assertWorkflowJsonBudget,
+  WORKFLOW_PAYLOAD_LIMITS,
   DEFAULT_WORKFLOW_STAGE_E_CAPABILITIES,
   isTerminalWorkflowRunStatus,
   isWorkflowVersion,
@@ -47,6 +55,8 @@ import {
   type NativeWorkflowResult,
 } from "./workflow-result-mapper.js";
 import { MastraWorkflowEventMapper } from "./workflow-event-mapper.js";
+import { assertTenantWorkflowIsolated } from "../workflows/tenant-execution-policy.js";
+import { workflowOutputFailure } from "./workflow-output-failure.js";
 
 type NativeRun = Awaited<ReturnType<AnyWorkflow["createRun"]>>;
 
@@ -149,14 +159,24 @@ export class MastraWorkflowRuntimeAdapter implements WorkflowRuntimePort {
   }
 
   async start(command: StartWorkflowRunCommand): Promise<WorkflowRunSnapshot> {
+    assertWorkflowJsonBudget(command, WORKFLOW_PAYLOAD_LIMITS.commandBytes);
+    assertWorkflowInputBudget(command.inputs);
+    assertWorkflowInputBudget(command.nodeInputs);
+    const tenant = currentServiceTenant();
+    if (tenant) {
+      // 身份只来自已验证的服务上下文，覆盖调用方提交的执行归属。
+      command = { ...command, requestContext: {
+        ...command.requestContext, ownerId: serviceTenantOwner(tenant), tenantId: tenant.tenantId,
+      } };
+    }
     this.assertMode(command);
     this.assertStageECapabilities(command);
     const ir = this.compileCommand(command);
+    if (tenant) assertTenantWorkflowIsolated(ir);
     this.assertCommand(command, ir);
     const productRunId = command.runId ?? this.productRunId();
     const nativeRunId = this.nativeRunId();
     const compiled = this.compiler.compile(ir, { targetNodeId: command.targetNodeId });
-    const native = await compiled.workflow.createRun({ runId: nativeRunId });
     const now = Date.now();
     const snapshot = this.initialSnapshot(productRunId, nativeRunId, command, ir, now);
     const record: StoredMastraWorkflowRun = {
@@ -168,15 +188,24 @@ export class MastraWorkflowRuntimeAdapter implements WorkflowRuntimePort {
       targetNodeId: command.targetNodeId,
       nodeInputs: command.nodeInputs,
       ownerId: typeof command.requestContext?.ownerId === "string" ? command.requestContext.ownerId : undefined,
+      ...(tenant ? { tenant: { ...tenant } } : {}),
     };
-    await this.runMappings.bind({
-      domain: "workflow",
-      productRunId,
-      mastraRunId: nativeRunId,
-      adapterVersion: MASTRA_WORKFLOW_ADAPTER_VERSION,
-    });
+    // 原子预留容量后才创建原生运行和映射；配额拒绝不能留下运行产物。
     await this.runs.create(record);
-    await this.journal.appendWorkflow(productRunId, { type: "run.status", status: "running" });
+    let native: NativeRun;
+    let bound = false;
+    try {
+      native = await compiled.workflow.createRun({ runId: nativeRunId });
+      await this.runMappings.bind({
+        domain: "workflow", productRunId, mastraRunId: nativeRunId, adapterVersion: MASTRA_WORKFLOW_ADAPTER_VERSION,
+      });
+      bound = true;
+      await this.journal.appendWorkflow(productRunId, { type: "run.status", status: "running" });
+    } catch (error) {
+      if (bound) await this.runMappings.remove("workflow", productRunId);
+      await this.runs.discardUnstarted(productRunId, nativeRunId);
+      throw error;
+    }
     const completion = this.executeStart(record, native, {
       ...safeWorkflowRequestContext(command.requestContext),
       ...(record.agentDependencies?.length ? { __workflowAgentVersions: record.agentDependencies } : {}),
@@ -189,7 +218,8 @@ export class MastraWorkflowRuntimeAdapter implements WorkflowRuntimePort {
   async get(runId: string): Promise<WorkflowRunSnapshot | null> {
     await this.cleanupExpiredTechnicalState();
     const record = await this.runs.get(runId);
-    if (!record) return null;
+    if (!record || !matchesServiceTenant(record.tenant)) return null;
+    if (record.tenant) assertTenantWorkflowIsolated(record.ir);
     const snapshot = await this.enrichWaitingSnapshot(record, record.snapshot);
     if (snapshot !== record.snapshot) await this.runs.update({ ...record, snapshot });
     if (
@@ -217,20 +247,19 @@ export class MastraWorkflowRuntimeAdapter implements WorkflowRuntimePort {
       const native = await this.restoreNativeRun(record);
       await native.cancel();
       const cancelled = cancelledWorkflowSnapshot(record.snapshot);
-      await this.finishRecord(record, cancelled);
-      await this.emitSnapshotDelta(record.snapshot, cancelled);
-      const projected = await this.projectSnapshot(cancelled);
-      await this.finishRecord(record, projected);
+      const projected = await this.finishSnapshot(record, cancelled, this.eventMapper(record));
       return { completion: Promise.resolve(projected) };
     });
     return setup.completion;
   }
 
   events(query: WorkflowRuntimeEventQuery): AsyncIterable<WorkflowRuntimeEvent> {
-    return this.observeAfterMaintenance(query.runId, query.sinceId ?? 0);
+    return this.observeAfterMaintenance(query.runId, query.sinceId ?? 0, query.signal);
   }
 
   async resume(command: ResumeWorkflowRunCommand): Promise<WorkflowRunSnapshot> {
+    assertWorkflowJsonBudget(command, WORKFLOW_PAYLOAD_LIMITS.commandBytes);
+    assertWorkflowInputBudget(command.resumeData);
     const setup = await this.withRunControl(command.runId, async () => {
       const record = await this.requireRecord(command.runId);
       const decision = this.interruptDecision(command);
@@ -386,14 +415,47 @@ export class MastraWorkflowRuntimeAdapter implements WorkflowRuntimePort {
     cancelled: boolean,
     mapper: MastraWorkflowEventMapper,
   ): Promise<WorkflowRunSnapshot> {
-    const previous = record.snapshot;
-    const mapped = mapMastraWorkflowResult(record, result, cancelled);
-    const snapshot = await this.enrichWaitingSnapshot(record, mapped);
-    await this.finishRecord(record, snapshot);
-    await this.emitSnapshotDelta(previous, snapshot, mapper);
-    const projected = await this.projectSnapshot(snapshot);
-    await this.finishRecord(record, projected);
-    return projected;
+    try {
+      if (isWorkflowOutputLimitError(result.error)) throw result.error;
+      const mapped = mapMastraWorkflowResult(record, result, cancelled);
+      if (isWorkflowOutputLimitError(mapped.error)) throw mapped.error;
+      const snapshot = await this.enrichWaitingSnapshot(record, mapped);
+      return await this.finishSnapshot(record, snapshot, mapper);
+    } catch (error) {
+      if (!isWorkflowOutputLimitError(error)) throw error;
+      return this.failOutputRun(record);
+    }
+  }
+
+  private async finishSnapshot(record: StoredMastraWorkflowRun, snapshot: WorkflowRunSnapshot, mapper: MastraWorkflowEventMapper): Promise<WorkflowRunSnapshot> {
+    try {
+      assertWorkflowOutputBudget(snapshot, WORKFLOW_OUTPUT_LIMITS.snapshotBytes);
+      // waiting 可恢复状态先持久化；订阅者收到 waiting 后立即审批时必须读到同一状态。
+      if (!isTerminalWorkflowRunStatus(snapshot.status)) await this.finishRecord(record, snapshot);
+      // 先模拟所有待写事件的最终投影，资源失败时不向订阅者提前发送成功终态。
+      const events = mapper.mapSnapshotDelta(record.snapshot, snapshot);
+      const history = await this.journal.listWorkflow(snapshot.id);
+      const lastId = history.at(-1)?.id ?? 0;
+      const candidate = projectWorkflowRuntimeEvents(snapshot, [...history, ...events.map((event, index) => ({
+        ...event, id: lastId + index + 1, runId: snapshot.id, at: Date.now(),
+      }))]);
+      assertWorkflowOutputBudget(candidate, WORKFLOW_OUTPUT_LIMITS.snapshotBytes);
+      assertWorkflowOutputBudget({ ...record, snapshot: candidate }, WORKFLOW_OUTPUT_LIMITS.recordBytes);
+      for (const event of events) await this.journal.appendWorkflow(snapshot.id, event);
+      const projected = await this.projectSnapshot(snapshot);
+      await this.finishRecord(record, projected);
+      return projected;
+    } catch (error) {
+      if (!isWorkflowOutputLimitError(error)) throw error;
+      return this.failOutputRun(record);
+    }
+  }
+
+  private async failOutputRun(record: StoredMastraWorkflowRun): Promise<WorkflowRunSnapshot> {
+    const failed = workflowOutputFailure(record.snapshot);
+    await this.finishRecord(record, failed);
+    await this.journal.appendWorkflow(failed.id, { type: "run.status", status: "failed", error: failed.error });
+    return failed;
   }
 
   private async finishRecord(record: StoredMastraWorkflowRun, snapshot: WorkflowRunSnapshot): Promise<void> {
@@ -401,21 +463,15 @@ export class MastraWorkflowRuntimeAdapter implements WorkflowRuntimePort {
   }
 
   private async projectSnapshot(snapshot: WorkflowRunSnapshot): Promise<WorkflowRunSnapshot> {
-    return projectWorkflowRuntimeEvents(snapshot, await this.journal.listWorkflow(snapshot.id));
-  }
-
-  private async emitSnapshotDelta(
-    previous: WorkflowRunSnapshot,
-    next: WorkflowRunSnapshot,
-    mapper = new MastraWorkflowEventMapper({ nativeRunId: "snapshot-only" }),
-  ): Promise<void> {
-    for (const event of mapper.mapSnapshotDelta(previous, next)) {
-      await this.journal.appendWorkflow(next.id, event);
-    }
+    if (snapshot.status === "failed" && isWorkflowOutputLimitError(snapshot.error)) return snapshot;
+    const projected = projectWorkflowRuntimeEvents(snapshot, await this.journal.listWorkflow(snapshot.id));
+    assertWorkflowOutputBudget(projected, WORKFLOW_OUTPUT_LIMITS.snapshotBytes);
+    return projected;
   }
 
   private eventMapper(record: StoredMastraWorkflowRun): MastraWorkflowEventMapper {
     return new MastraWorkflowEventMapper({
+      deferTerminalStatus: true,
       nativeRunId: record.nativeRunId,
       ir: record.ir,
       initialEvents: [{ type: "run.status", status: "running" }],
@@ -429,9 +485,21 @@ export class MastraWorkflowRuntimeAdapter implements WorkflowRuntimePort {
   ): Promise<NativeEventObserver> {
     let pending = Promise.resolve();
     let closed = false;
+    let failure: unknown;
     const unsubscribe = await native.watchAsync((chunk) => {
+      if (failure || closed) return;
       pending = pending.then(async () => {
-        for (const event of mapper.mapChunk(chunk)) await this.journal.appendWorkflow(runId, event);
+        if (failure) return;
+        for (const event of mapper.mapChunk(chunk)) {
+          // 原生完成只表示框架结束；产品终态必须等待输出/快照预算检查。
+          if (event.type === "run.status" && isTerminalWorkflowRunStatus(event.status)) continue;
+          await this.journal.appendWorkflow(runId, event);
+        }
+      }).catch(async (error) => {
+        failure = error;
+        if (isWorkflowOutputLimitError(error)) {
+          try { await native.cancel(); } catch { /* 保留触发取消的资源错误，close 会将它上报。 */ }
+        }
       });
     });
     return {
@@ -441,6 +509,7 @@ export class MastraWorkflowRuntimeAdapter implements WorkflowRuntimePort {
           unsubscribe();
         }
         await pending;
+        if (failure) throw failure;
       },
     };
   }
@@ -486,6 +555,7 @@ export class MastraWorkflowRuntimeAdapter implements WorkflowRuntimePort {
 
   private assertStageECapabilities(command: StartWorkflowRunCommand): void {
     const definitions = [command.workflow, ...(command.workflowDependencies ?? [])];
+    for (const definition of definitions) assertWorkflowDefinitionBudget(definition);
     const required = new Set([
       ...requiredWorkflowStageECapabilities(definitions.flatMap((definition) => definition.nodes)),
       ...(command.requiredRuntimeCapabilities ?? []),
@@ -577,11 +647,12 @@ export class MastraWorkflowRuntimeAdapter implements WorkflowRuntimePort {
 
   private async requireRecord(runId: string): Promise<StoredMastraWorkflowRun> {
     const record = await this.runs.get(runId);
-    if (!record) throw new RuntimePortError("RUNTIME_NOT_FOUND", `Workflow run ${runId} 不存在。`);
+    if (!record || !matchesServiceTenant(record.tenant)) throw new RuntimePortError("RUNTIME_NOT_FOUND", `Workflow run ${runId} 不存在。`);
     return record;
   }
 
   private async restoreNativeRun(record: StoredMastraWorkflowRun): Promise<NativeRun> {
+    if (record.tenant) assertTenantWorkflowIsolated(record.ir);
     const compiled = this.compiler.compile(record.ir, { targetNodeId: record.targetNodeId });
     return compiled.workflow.createRun({ runId: record.nativeRunId });
   }
@@ -838,18 +909,23 @@ export class MastraWorkflowRuntimeAdapter implements WorkflowRuntimePort {
     }
   }
 
-  private async *observe(runId: string, sinceId: number): AsyncIterable<WorkflowRuntimeEvent> {
+  private async *observe(runId: string, sinceId: number, signal?: AbortSignal): AsyncIterable<WorkflowRuntimeEvent> {
     await this.requireRecord(runId);
+    if (signal?.aborted) return;
     const queue = new AsyncEventQueue<WorkflowRuntimeEvent>();
+    const close = () => queue.close();
+    signal?.addEventListener("abort", close, { once: true });
     const unsubscribe = this.journal.subscribeWorkflow(runId, (event) => queue.push(event));
     let lastId = sinceId;
     try {
       for (const event of await this.journal.listWorkflow(runId, sinceId)) {
+        if (signal?.aborted) return;
         lastId = Math.max(lastId, event.id);
         yield event;
         if (event.type === "run.status" && isTerminalWorkflowRunStatus(event.status)) return;
       }
       for await (const event of queue) {
+        if (signal?.aborted) return;
         if (event.id <= lastId) continue;
         lastId = event.id;
         yield event;
@@ -857,11 +933,13 @@ export class MastraWorkflowRuntimeAdapter implements WorkflowRuntimePort {
       }
     } finally {
       unsubscribe();
+      signal?.removeEventListener("abort", close);
+      queue.close();
     }
   }
 
-  private async *observeAfterMaintenance(runId: string, sinceId: number): AsyncIterable<WorkflowRuntimeEvent> {
+  private async *observeAfterMaintenance(runId: string, sinceId: number, signal?: AbortSignal): AsyncIterable<WorkflowRuntimeEvent> {
     await this.get(runId);
-    yield* this.observe(runId, sinceId);
+    yield* this.observe(runId, sinceId, signal);
   }
 }

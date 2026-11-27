@@ -4,6 +4,8 @@ import { assertAgentServiceListenAddress, resolveAgentServiceToken, type AgentSe
 import type { Server } from "node:http";
 import type { Mastra } from "@mastra/core/mastra";
 import { NestFactory } from "@nestjs/core";
+import { WORKFLOW_PAYLOAD_LIMITS } from "@orbit/workflow-core";
+import { createTenantHttpLimits } from "@orbit/service-auth/http";
 import type { NestExpressApplication } from "@nestjs/platform-express";
 import {
   getOrCreateMastraRuntime,
@@ -15,9 +17,12 @@ import { AgentAppModule } from "./agent-app.module.js";
 import { OrbitHttpExceptionFilter } from "./orbit-http-exception.filter.js";
 import { OrbitShutdownService } from "./orbit-shutdown.service.js";
 import { createAgentServiceAuthMiddleware } from "./agent-service-auth.middleware.js";
+import { createAgentTenantMiddleware, resolveAgentDeploymentMode, type AgentDeploymentMode } from "./agent-tenant.middleware.js";
 
 /** Nest HTTP 装配选项；与独立入口共用服务认证和资源关闭契约。 */
 export type CreateNestAgentServerOptions = AgentServiceAuthOptions & {
+  /** 显式选择嵌入宿主模式；生产仍强制 SaaS。 */
+  mode?: AgentDeploymentMode;
   mastra?: Mastra;
   runtimeRoot?: string;
   cleanupMastra?: () => Promise<void>;
@@ -87,15 +92,18 @@ export async function createNestAgentHttpServer(
 ): Promise<AgentServerLike> {
   // 生产缺少凭据时必须先失败，不能先初始化数据库或 Runtime。
   const token = resolveAgentServiceToken(options);
+  const tenantBoundary = createAgentTenantMiddleware(resolveAgentDeploymentMode(options.mode), token);
   const sharedRuntime = options.mastra
     ? null
     : await getOrCreateMastraRuntime({ root: options.runtimeRoot });
   const mastra = options.mastra ?? sharedRuntime?.mastra;
   if (!mastra) throw new Error("Mastra runtime is required to create the Nest Agent service");
   let cleaned = false;
+  const traffic = createTenantHttpLimits();
   const cleanupMastra = async () => {
     if (cleaned) return;
     cleaned = true;
+    traffic.close();
     if (options.cleanupMastra) {
       await options.cleanupMastra();
       return;
@@ -111,6 +119,9 @@ export async function createNestAgentHttpServer(
     { logger: false },
   );
   app.use(createAgentServiceAuthMiddleware(token));
+  app.use(tenantBoundary);
+  app.use(traffic.middleware);
+  app.useBodyParser("json", { limit: WORKFLOW_PAYLOAD_LIMITS.commandBytes, inflate: false });
   app.useGlobalFilters(new OrbitHttpExceptionFilter());
   if (options.enableShutdownHooks) app.enableShutdownHooks(["SIGINT", "SIGTERM"]);
   return new NestAgentServer(app, app.get(OrbitShutdownService), token);

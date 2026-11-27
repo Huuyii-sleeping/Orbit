@@ -1,4 +1,5 @@
 import type { WorkflowStreamEvent } from "@mastra/core/stream";
+import { assertWorkflowOutputBudget, WORKFLOW_OUTPUT_LIMITS } from "@orbit/workflow-core";
 import type {
   WorkflowExecutionEventIdentity,
   WorkflowIR,
@@ -201,9 +202,11 @@ export class MastraWorkflowEventMapper {
   private readonly controlStepNodeIds = new Map<string, string>();
   private readonly emitted = new Set<string>();
   private currentNodeId?: string;
+  private readonly deferTerminalStatus: boolean;
 
-  constructor(options: { nativeRunId: string; ir?: WorkflowIR; initialEvents?: WorkflowRuntimeEventInput[] }) {
+  constructor(options: { nativeRunId: string; ir?: WorkflowIR; initialEvents?: WorkflowRuntimeEventInput[]; deferTerminalStatus?: boolean }) {
     this.nativeRunId = options.nativeRunId;
+    this.deferTerminalStatus = options.deferTerminalStatus ?? false;
     if (options.ir) {
       this.productNodeIds = new Set();
       const visit = (nodes: WorkflowIR["nodes"]): void => {
@@ -257,9 +260,10 @@ export class MastraWorkflowEventMapper {
       throw new Error(`Mastra Workflow runId 不一致：expected ${this.nativeRunId}, received ${chunk.runId}`);
     }
     if (chunk.type === "workflow-start") return this.unique([{ type: "run.status", status: "running" }]);
-    if (chunk.type === "workflow-canceled") return this.unique([{ type: "run.status", status: "cancelled" }]);
-    if (chunk.type === "workflow-paused") return this.unique([{ type: "run.status", status: "waiting" }]);
+    if (chunk.type === "workflow-canceled") return this.deferTerminalStatus ? [] : this.unique([{ type: "run.status", status: "cancelled" }]);
+    if (chunk.type === "workflow-paused") return this.deferTerminalStatus ? [] : this.unique([{ type: "run.status", status: "waiting" }]);
     if (chunk.type === "workflow-finish") {
+      if (this.deferTerminalStatus) return [];
       return this.unique([{ type: "run.status", status: productRunStatus(chunk.payload.workflowStatus) }]);
     }
     if (chunk.type === "workflow-step-start") {
@@ -288,12 +292,12 @@ export class MastraWorkflowEventMapper {
       const identity = eventIdentity(identitySource, nodeId);
       return this.unique([
         { type: "node.status", nodeId, status: "waiting", attempt: 1, ...identity },
-        {
+        ...(!this.deferTerminalStatus ? [{
           type: "run.waiting",
           nodeId,
           reason: reason(suspendPayload),
           ...(waitingMetadata(suspendPayload) ? { waiting: waitingMetadata(suspendPayload) } : {}),
-        },
+        } as const] : []),
       ]);
     }
     if (chunk.type === "workflow-step-result") {
@@ -429,6 +433,7 @@ export class MastraWorkflowEventMapper {
 
   private unique(events: WorkflowRuntimeEventInput[]): WorkflowRuntimeEventInput[] {
     return events.filter((event) => {
+      assertWorkflowOutputBudget(event, WORKFLOW_OUTPUT_LIMITS.eventBytes);
       const signature = JSON.stringify(event);
       if (this.emitted.has(signature)) return false;
       this.emitted.add(signature);

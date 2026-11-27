@@ -1,5 +1,6 @@
 import { createHash } from "node:crypto";
 import type { WorkflowIRIterationNode } from "@orbit/workflow-core";
+import { assertWorkflowOutputBudget, isWorkflowOutputLimitError, WORKFLOW_OUTPUT_LIMITS, WorkflowOutputLimitError } from "@orbit/workflow-core";
 import { createStep, createWorkflow, type AnyWorkflow } from "@mastra/core/workflows";
 import { z } from "zod";
 import {
@@ -19,7 +20,10 @@ export const MASTRA_ITERATION_DESCRIPTOR_SCHEMA = z.object({
 
 export type MastraIterationDescriptor = z.infer<typeof MASTRA_ITERATION_DESCRIPTOR_SCHEMA>;
 
-export const MASTRA_ITERATION_DESCRIPTORS_SCHEMA = z.array(MASTRA_ITERATION_DESCRIPTOR_SCHEMA);
+export const MASTRA_ITERATION_DESCRIPTORS_SCHEMA = z.array(MASTRA_ITERATION_DESCRIPTOR_SCHEMA).transform((items) => {
+  assertWorkflowOutputBudget(items, WORKFLOW_OUTPUT_LIMITS.frameBytes);
+  return items;
+});
 
 const ITERATION_ERROR_SCHEMA = z.object({ code: z.string(), message: z.string() });
 
@@ -41,7 +45,10 @@ export const MASTRA_ITERATION_RESULT_SCHEMA = z.discriminatedUnion("status", [
 ]);
 
 export type MastraIterationResult = z.infer<typeof MASTRA_ITERATION_RESULT_SCHEMA>;
-export const MASTRA_ITERATION_RESULTS_SCHEMA = z.array(MASTRA_ITERATION_RESULT_SCHEMA);
+export const MASTRA_ITERATION_RESULTS_SCHEMA = z.array(MASTRA_ITERATION_RESULT_SCHEMA).transform((items) => {
+  assertWorkflowOutputBudget(items, WORKFLOW_OUTPUT_LIMITS.frameBytes);
+  return items;
+});
 export const MASTRA_ITERATION_MERGE_INPUT_SCHEMA = z.object({
   frame: MASTRA_WORKFLOW_FRAME_SCHEMA,
   results: MASTRA_ITERATION_RESULTS_SCHEMA,
@@ -224,6 +231,7 @@ export function mergeIterationResults(
     seen.add(result.index);
   }
   const failed = ordered.find((result) => result.status === "failed");
+  if (ordered.some((result) => result.status === "failed" && isWorkflowOutputLimitError(result.error))) throw new WorkflowOutputLimitError();
   if (failed?.status === "failed" && node.config.failurePolicy === "fail-fast") {
     throw Object.assign(new Error(failed.error.message), { code: failed.error.code, iterationIndex: failed.index });
   }
@@ -231,6 +239,7 @@ export function mergeIterationResults(
   const aggregation = node.config.aggregation === "ordered"
     ? values.map(([, value]) => value)
     : Object.fromEntries(values.map(([index, value]) => [String(index), value]));
+  assertWorkflowOutputBudget({ results: aggregation }, WORKFLOW_OUTPUT_LIMITS.nodeBytes);
   const nodeOutputs = { ...parentFrame.nodeOutputs };
   const selectedPorts = { ...parentFrame.selectedPorts };
   const skippedNodeIds = new Set(parentFrame.skippedNodeIds);

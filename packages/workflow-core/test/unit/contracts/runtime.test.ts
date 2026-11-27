@@ -20,6 +20,14 @@ const run: WorkflowRunSnapshot = {
 };
 
 describe("workflow runtime projection", () => {
+  it("资源失败清除输出，随后回放历史输出不能重新填充失败快照", () => {
+    const current: WorkflowRunSnapshot = { ...run, output: { secret: "large" }, nodeRuns: { agent: { nodeId: "agent", status: "succeeded", attempt: 1, output: { text: "large" } } } };
+    const failed = applyWorkflowRuntimeEventToSnapshot(current, { id: 10, runId: run.id, at: 10, type: "run.status", status: "failed", error: { code: "WORKFLOW_OUTPUT_LIMIT_EXCEEDED", message: "budget" } });
+    expect(failed.output).toBeUndefined();
+    expect(failed.nodeRuns.agent.output).toBeUndefined();
+    const replay = projectWorkflowRuntimeEvents(failed, [{ id: 1, runId: run.id, at: 1, type: "node.output", nodeId: "agent", output: { text: "history" } }, { id: 2, runId: run.id, at: 2, type: "run.status", status: "running" }]);
+    expect(replay).toEqual(failed);
+  });
   it("以固定七项能力矩阵递归映射阶段 E 节点，且只关闭未通过的 Parallel/Merge", () => {
     const iteration = builtinNodeRegistry.get("iteration")!;
     const approval = builtinNodeRegistry.get("human-approval")!;

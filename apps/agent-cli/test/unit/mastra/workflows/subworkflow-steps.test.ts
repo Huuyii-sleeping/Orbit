@@ -1,4 +1,5 @@
 import type { WorkflowIRSubworkflowNode } from "@orbit/workflow-core";
+import { WORKFLOW_OUTPUT_LIMITS } from "@orbit/workflow-core";
 import { describe, expect, it } from "vitest";
 import {
   deriveSubworkflowChildRunId,
@@ -38,6 +39,15 @@ function subworkflowNode(): WorkflowIRSubworkflowNode {
 }
 
 describe("mastra/workflows/subworkflow-steps", () => {
+  it("子流程输出增加绑定字段前缀后仍检查完整节点预算", () => {
+    const node = subworkflowNode();
+    const parent = createMastraWorkflowFrame({ productRunId: "budget" });
+    const child = createMastraWorkflowFrame({ productRunId: "budget" });
+    child.output = { message: "x".repeat(WORKFLOW_OUTPUT_LIMITS.nodeBytes - Buffer.byteLength(JSON.stringify({ message: "" }))) };
+    expect(Buffer.byteLength(JSON.stringify(child.output))).toBe(WORKFLOW_OUTPUT_LIMITS.nodeBytes);
+    expect(() => mergeSubworkflowFrame(node, parent, child)).toThrowError(expect.objectContaining({ code: "WORKFLOW_OUTPUT_LIMIT_EXCEEDED" }));
+  });
+
   it("从显式绑定创建隔离 child frame，并稳定派生 node instance、childRunId 与 executionPath", async () => {
     const node = subworkflowNode();
     const parent = createMastraWorkflowFrame({

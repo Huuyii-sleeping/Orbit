@@ -7,6 +7,7 @@ export type WorkflowNodeRunStatus = "pending" | "ready" | "running" | "waiting" 
 /** 工作流运行模式。 */
 import type { ApprovalDisplayValue } from "./approval.js";
 import type { WorkflowJsonSchema } from "./json-schema.js";
+import { isWorkflowOutputLimitError } from "../validation/output-budget.js";
 import type { WorkflowNode } from "./nodes.js";
 
 export type WorkflowRunMode = "node-test" | "draft" | "production";
@@ -200,6 +201,8 @@ export function applyWorkflowRuntimeEventToSnapshot(
   event: WorkflowRuntimeEvent,
 ): WorkflowRunSnapshot {
   if (event.runId !== run.id) return run;
+  // 资源失败已丢弃执行输出；旧事件回放不能重新膨胀该终态快照。
+  if (run.status === "failed" && isWorkflowOutputLimitError(run.error)) return run;
   if (event.type === "run.status") {
     return {
       ...run,
@@ -208,6 +211,12 @@ export function applyWorkflowRuntimeEventToSnapshot(
       startedAt: event.status === "running" ? run.startedAt ?? event.at : run.startedAt,
       finishedAt: isTerminalWorkflowRunStatus(event.status) ? event.at : run.finishedAt,
       ...((event.status === "running" || isTerminalWorkflowRunStatus(event.status)) ? { waiting: undefined } : {}),
+      ...(event.status === "failed" && isWorkflowOutputLimitError(event.error) ? {
+        output: undefined, nodeInstances: undefined, childRuns: undefined,
+        nodeRuns: Object.fromEntries(Object.entries(run.nodeRuns).map(([id, node]) => [id, {
+          ...node, output: undefined, input: undefined, error: undefined,
+        }])),
+      } : {}),
     };
   }
   if (event.type === "run.output") return { ...run, output: event.output };

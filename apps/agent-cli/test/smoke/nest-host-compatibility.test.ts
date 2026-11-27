@@ -243,6 +243,19 @@ afterEach(async () => {
 });
 
 describe("Nest Agent host compatibility", () => {
+  it("rejects oversized and compressed JSON before calling the runtime", async () => {
+    const service = createService();
+    const base = await listen(await createNestAgentHttpServer(service, { mastra: new Mastra({}) }));
+    const oversized = await fetch(`${base}/workflow-runs`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ text: "x".repeat(2_097_152) }) });
+    expect(oversized.status).toBe(413);
+    expect(await oversized.json()).toMatchObject({ error: { code: "REQUEST_BODY_TOO_LARGE" } });
+    const compressed = await fetch(`${base}/workflow-runs`, { method: "POST", headers: { "Content-Type": "application/json", "Content-Encoding": "gzip" }, body: "invalid compressed body" });
+    expect(compressed.status).toBe(415);
+    const malformed = await fetch(`${base}/workflow-runs`, { method: "POST", headers: { "Content-Type": "application/json" }, body: '{"secret":' });
+    expect(malformed.status).toBe(400);
+    expect(JSON.stringify(await malformed.json())).not.toContain("secret");
+    expect((await fetch(`${base}/workflow-runs/workflow-run-1`)).status).toBe(200);
+  });
   it("keeps existing Orbit product routes on the Nest host", async () => {
     const service = createService();
     const nestBase = await listen(

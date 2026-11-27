@@ -1,7 +1,7 @@
 import { mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { afterEach, describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import { SignJWT, generateKeyPair } from "jose";
 import { SqliteSessionStore } from "../../../src/identity/sqlite-session-store.js";
 
@@ -19,14 +19,14 @@ async function setup() {
   return { path, store };
 }
 
-async function payload(subject: string, sid: string, tenantId = "org-a") {
+async function payload(subject: string, sid: string, tenantId = "org-a", roles: string[] = []) {
   const { privateKey } = await generateKeyPair("RS256");
   const id_token = await new SignJWT({ sid, organization: { [tenantId]: { id: tenantId } } })
     .setProtectedHeader({ alg: "RS256" }).setIssuer("issuer").setSubject(subject)
     .setAudience("orbit").setIssuedAt().setExpirationTime("5m").sign(privateKey);
   return {
     header: { iat: Math.floor(Date.now() / 1000), uat: Math.floor(Date.now() / 1000), exp: Math.floor(Date.now() / 1000) + 300 },
-    data: { id_token, orbitIdentity: { issuer: "issuer", subject, organizations: [{ id: tenantId, alias: tenantId }], selectedTenantId: tenantId } },
+    data: { id_token, orbitIdentity: { issuer: "issuer", subject, organizations: [{ id: tenantId, alias: tenantId, roles }], selectedTenantId: tenantId } },
     cookie: { expires: Date.now() + 300_000, maxAge: 300_000 },
   };
 }
@@ -42,6 +42,18 @@ function destroy(store: SqliteSessionStore, id: string) {
 }
 
 describe("SQLite OIDC session adapter", () => {
+  it("固定会话到期后旧角色不能因迟到写回而继续有效", async () => {
+    const { store } = await setup();
+    const value = await payload("user1", "sid1", "org-a", ["admin"]);
+    await set(store, "privileged", value);
+    const clock = vi.spyOn(Date, "now").mockReturnValue(Date.now() + 301_000);
+    try {
+      expect(await get(store, "privileged")).toBeNull();
+      await set(store, "privileged", value);
+      expect(await get(store, "privileged")).toBeNull();
+    } finally { clock.mockRestore(); }
+  });
+
   it("keeps a logout tombstone so delayed requests cannot resurrect a cookie", async () => {
     const { path, store } = await setup();
     const value = await payload("user1", "sid1");

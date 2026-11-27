@@ -1,3 +1,4 @@
+import { migrateOrganizationAuthorization } from "./migrations/organization-authorization.js";
 import { replaceSopBackup } from "../sops/sop-backup.js";
 import { Injectable, type OnModuleDestroy } from "@nestjs/common";
 import Database from "better-sqlite3";
@@ -14,7 +15,7 @@ export type SopDatabaseOptions = {
   requireTenantContext?: boolean;
 };
 
-const latestMigrationVersion = 7;
+const latestMigrationVersion = 9;
 
 function readPragmaValue(row: unknown, key: string): string {
   if (!row || typeof row !== "object") return "";
@@ -40,6 +41,9 @@ export class SopDatabase implements OnModuleDestroy {
   get database(): Database.Database {
     return this.connection;
   }
+
+  /** 显式部署边界；业务授权不能把 SaaS 中缺失上下文解释成本地调用。 */
+  get isTenantScoped(): boolean { return this.options.requireTenantContext === true; }
 
   /** 当前产品数据归属；本地旧数据使用空命名空间，SaaS 必须来自已验证请求。 */
   tenantScope(): { issuer: string; tenantId: string } {
@@ -107,10 +111,13 @@ export class SopDatabase implements OnModuleDestroy {
         "select id, revision, schema_version, name, summary, content_json, created_at, updated_at from sop_drafts limit 0",
         "select id, workflow_id, version, schema_version, content_hash, created_by, release_notes, content_json, created_at from sop_versions limit 0",
         "select id, version, name, summary, source_workflow_id, source_version_id, parameter_schema_json, content_json, created_at, updated_at from sop_templates limit 0",
-        "select id, workflow_id, version_id, content_hash, mode, status, input_json, output_json, error_json, node_instances_json, child_runs_json, waiting_json, created_at, started_at, finished_at from workflow_runs limit 0",
-        "select run_id, node_id, status, attempt, input_json, output_json, error_json, started_at, finished_at, duration_ms from workflow_node_runs limit 0",
-        "select run_id, event_id, type, event_json, created_at from workflow_events limit 0",
+        "select issuer, tenant_id, id, workflow_id, version_id, content_hash, mode, status, input_json, output_json, error_json, node_instances_json, child_runs_json, waiting_json, created_at, started_at, finished_at from workflow_runs limit 0",
+        "select issuer, tenant_id, run_id, node_id, status, attempt, input_json, output_json, error_json, started_at, finished_at, duration_ms from workflow_node_runs limit 0",
+        "select issuer, tenant_id, run_id, event_id, type, event_json, created_at from workflow_events limit 0",
         "select id, agent_profile_id, version, content_hash, name, description, snapshot_json, created_by, release_notes, created_at from agent_versions limit 0",
+        "select issuer, tenant_id, id, revision, profile_json, created_at, updated_at from agent_profiles limit 0",
+        "select initiated_by from workflow_runs limit 0",
+        "select issuer, tenant_id, operation_id, subject, action, resource_type, resource_id, phase, detail_json, created_at from organization_audit_events limit 0",
       ];
       for (const sql of requiredSchema) candidate.database.prepare(sql).all();
       if (candidate.database.prepare("PRAGMA foreign_key_check").all().length > 0) throw new SopStorageError("备份包含不完整的外键引用。");
@@ -393,6 +400,74 @@ export class SopDatabase implements OnModuleDestroy {
         database.prepare("insert into schema_migrations(version, applied_at) values (?, ?)").run(7, Date.now());
       })();
     }
+    if (current.version < 8) {
+      database.transaction(() => {
+        database.exec(`
+          create table workflow_runs_next (
+            issuer text not null default '', tenant_id text not null default '', id text not null,
+            workflow_id text not null, version_id text, content_hash text, mode text not null,
+            status text not null, input_json text not null, output_json text, error_json text,
+            node_instances_json text, child_runs_json text, waiting_json text,
+            created_at integer not null, started_at integer, finished_at integer,
+            primary key(issuer, tenant_id, id), check ((issuer = '') = (tenant_id = ''))
+          );
+          insert into workflow_runs_next(id, workflow_id, version_id, content_hash, mode, status,
+            input_json, output_json, error_json, node_instances_json, child_runs_json, waiting_json,
+            created_at, started_at, finished_at)
+            select id, workflow_id, version_id, content_hash, mode, status,
+              input_json, output_json, error_json, node_instances_json, child_runs_json, waiting_json,
+              created_at, started_at, finished_at from workflow_runs;
+
+          create table workflow_node_runs_next (
+            issuer text not null default '', tenant_id text not null default '', run_id text not null,
+            node_id text not null, status text not null, attempt integer not null, input_json text,
+            output_json text, error_json text, started_at integer, finished_at integer, duration_ms integer,
+            primary key(issuer, tenant_id, run_id, node_id),
+            foreign key(issuer, tenant_id, run_id) references workflow_runs_next(issuer, tenant_id, id) on delete cascade
+          );
+          insert into workflow_node_runs_next(run_id, node_id, status, attempt, input_json, output_json,
+            error_json, started_at, finished_at, duration_ms)
+            select run_id, node_id, status, attempt, input_json, output_json,
+              error_json, started_at, finished_at, duration_ms from workflow_node_runs;
+
+          create table workflow_events_next (
+            issuer text not null default '', tenant_id text not null default '', run_id text not null,
+            event_id integer not null, type text not null, event_json text not null, created_at integer not null,
+            primary key(issuer, tenant_id, run_id, event_id),
+            foreign key(issuer, tenant_id, run_id) references workflow_runs_next(issuer, tenant_id, id) on delete cascade
+          );
+          insert into workflow_events_next(run_id, event_id, type, event_json, created_at)
+            select run_id, event_id, type, event_json, created_at from workflow_events;
+
+          drop table workflow_node_runs;
+          drop table workflow_events;
+          drop table workflow_runs;
+          alter table workflow_runs_next rename to workflow_runs;
+          alter table workflow_node_runs_next rename to workflow_node_runs;
+          alter table workflow_events_next rename to workflow_events;
+          create index workflow_runs_workflow_created on workflow_runs(issuer, tenant_id, workflow_id, created_at desc);
+          create index workflow_runs_status_created on workflow_runs(issuer, tenant_id, status, created_at desc);
+          create index workflow_node_runs_status on workflow_node_runs(issuer, tenant_id, run_id, status);
+          create index workflow_events_created on workflow_events(issuer, tenant_id, run_id, created_at);
+
+          create table agent_profiles (
+            issuer text not null, tenant_id text not null, id text not null,
+            revision integer not null, profile_json text not null,
+            created_at integer not null, updated_at integer not null,
+            primary key(issuer, tenant_id, id),
+            check (issuer <> '' and tenant_id <> ''), check (revision >= 0)
+          );
+          create index agent_profiles_updated_at on agent_profiles(issuer, tenant_id, updated_at desc);
+          create trigger agent_versions_tenant_profile before insert on agent_versions
+            when new.issuer != '' and not exists (
+              select 1 from agent_profiles where issuer = new.issuer and tenant_id = new.tenant_id
+                and id = new.agent_profile_id
+            ) begin select raise(abort, 'tenant agent profile is required'); end;
+        `);
+        database.prepare("insert into schema_migrations(version, applied_at) values (?, ?)").run(8, Date.now());
+      })();
+    }
+    if (current.version < 9) migrateOrganizationAuthorization(database);
     const after = database.prepare("select coalesce(max(version), 0) as version from schema_migrations").get() as { version: number };
     if (after.version !== latestMigrationVersion) throw new SopStorageError(`不支持的 SOP 数据库迁移版本：${after.version}。`);
   }

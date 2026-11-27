@@ -1,7 +1,7 @@
 import { AgentConfigurationError, normalizeAgentConfiguration, type AgentConfiguration } from "@orbit/workflow-core";
 import { Inject, Injectable } from "@nestjs/common";
 import { randomUUID } from "node:crypto";
-import { LocalStoreService } from "../storage/local-store.service.js";
+import { AgentProfileRepository } from "./agent-profile.repository.js";
 import { SkillRegistryService } from "../skills/skill-registry.service.js";
 import type { SkillRegistryItem } from "../skills/skill-types.js";
 import type { SkillRegistrySource, SkillSourceType } from "../skills/skill-types.js";
@@ -60,8 +60,6 @@ export class AgentRevisionInputError extends Error {
   readonly code = "AGENT_REVISION_INVALID";
   constructor() { super("revision must be a non-negative integer"); }
 }
-
-const AGENTS_STORE_KEY = "agents";
 
 const defaultAgentProfile: Omit<AgentProfile, "id" | "createdAt" | "updatedAt"> = {
   revision: 0,
@@ -213,7 +211,7 @@ export function normalizeAgentProfile(value: unknown, fallbackId: string = rando
 @Injectable()
 export class AgentProfileService {
   constructor(
-    @Inject(LocalStoreService) private readonly store: LocalStoreService,
+    @Inject(AgentProfileRepository) private readonly store: AgentProfileRepository,
     @Inject(SkillRegistryService) private readonly skillRegistryService: Pick<SkillRegistryService, "listSkills">,
   ) {}
 
@@ -241,7 +239,7 @@ export class AgentProfileService {
     const validated = await this.validateAgentSkillBindings(agent, {
       dropUnavailable: !Array.isArray(inputRecord.skillIds) && !Array.isArray(inputRecord.skills),
     });
-    await this.store.updateSection<AgentProfile[]>(AGENTS_STORE_KEY, [], (agents) => [validated, ...agents]);
+    await this.store.update((agents) => [validated, ...agents]);
     return validated;
   }
 
@@ -270,7 +268,7 @@ export class AgentProfileService {
     );
     this.validateRequiredFields(updated);
     const validated = await this.validateAgentSkillBindings(updated);
-    await this.store.updateSection<AgentProfile[]>(AGENTS_STORE_KEY, [], (latest) => {
+    await this.store.update((latest) => {
       const persisted = latest.find((agent) => agent.id === agentId);
       if (!persisted || normalizeAgentProfile(persisted).revision !== current.revision) throw new AgentRevisionConflictError();
       return latest.map((agent) => agent.id === agentId ? validated : agent);
@@ -281,7 +279,7 @@ export class AgentProfileService {
   /** Deletes an existing agent profile and reports whether a record was removed. */
   async deleteAgent(agentId: string): Promise<boolean> {
     let deleted = false;
-    await this.store.updateSection<AgentProfile[]>(AGENTS_STORE_KEY, [], (agents) => {
+    await this.store.update((agents) => {
       const next = agents.filter((agent) => agent.id !== agentId);
       deleted = next.length !== agents.length;
       return next;
@@ -290,7 +288,7 @@ export class AgentProfileService {
   }
 
   private async readAgents(): Promise<AgentProfile[]> {
-    const value = await this.store.readSection(AGENTS_STORE_KEY, []);
+    const value = await this.store.list();
     if (!Array.isArray(value)) {
       return [];
     }
@@ -302,10 +300,6 @@ export class AgentProfileService {
   private validateRequiredFields(agent: AgentProfile) {
     if (!agent.name) throw new AgentConfigurationError("请填写 Agent 名称。");
     if (!agent.systemPrompt) throw new AgentConfigurationError("请填写 Agent 职责。");
-  }
-
-  private async writeAgents(agents: AgentProfile[]): Promise<AgentProfile[]> {
-    return this.store.writeSection(AGENTS_STORE_KEY, agents);
   }
 
   private async validateAgentSkillBindings(

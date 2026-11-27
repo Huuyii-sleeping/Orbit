@@ -5,6 +5,7 @@ import { SopTemplatesController } from "./sop-templates.controller.js";
 import { SopsController } from "./sops.controller.js";
 import { SopsService } from "./sops.service.js";
 import { SqliteSopsRepository } from "./sqlite-sops.repository.js";
+import { OrganizationAuthorizationModule } from "../identity/organization-authorization.module.js";
 import { SOPS_REPOSITORY } from "./sops.repository.js";
 import {
   resolveWorkflowStageECapabilities,
@@ -25,7 +26,7 @@ export class SopsModule {
   ): DynamicModule {
     return {
       module: SopsModule,
-      imports: [database, agentVersions],
+      imports: [database, agentVersions, OrganizationAuthorizationModule.register(database)],
       controllers: [SopsController, SopTemplatesController],
       providers: [
         {

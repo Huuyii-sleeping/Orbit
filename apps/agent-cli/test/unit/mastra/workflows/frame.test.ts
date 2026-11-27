@@ -6,6 +6,12 @@ import {
 } from "../../../../src/mastra/workflows/frame.js";
 
 describe("MastraWorkflowFrame", () => {
+  it("累积 frame 超限时在传递给下一步前失败，错误不包含输出原文", () => {
+    const frame = createMastraWorkflowFrame({ productRunId: "budget" });
+    frame.nodeOutputs = { a: { text: "private-frame-".repeat(80_000) }, b: { text: "x".repeat(1_000_000) } };
+    expect(() => MASTRA_WORKFLOW_FRAME_SCHEMA.parse(frame)).toThrowError(expect.objectContaining({ code: "WORKFLOW_OUTPUT_LIMIT_EXCEEDED" }));
+    try { MASTRA_WORKFLOW_FRAME_SCHEMA.parse(frame); } catch (error) { expect(String(error)).not.toContain("private-frame-"); }
+  });
   it("保存框架无关的容器、实例和 child run identity", () => {
     const frame = createMastraWorkflowFrame({
       productRunId: "run-1",

@@ -25,6 +25,8 @@ import {
   type WorkflowResourceEstimate,
 } from "./contracts.js";
 import { validateWorkflowJsonSchema } from "./schema.js";
+import { assertWorkflowDefinitionBudget } from "../validation/resource-limits.js";
+import { WorkflowResourceLimitError } from "../validation/json-budget.js";
 
 function diagnostic(code: string, message: string, location: WorkflowDiagnostic["location"]): WorkflowDiagnostic {
   return { code, severity: "error", message, location };
@@ -347,9 +349,15 @@ function collectDependencies(graph: WorkflowIRGraph): WorkflowIRDependency[] {
 export function compileWorkflow(value: unknown, options: CompileWorkflowOptions = {}): WorkflowCompileResult {
   let normalized: ReturnType<typeof normalizeSource>;
   try {
+    // 保留调用方更低预算的完整诊断；先用安全上界阻止无界输入进入递归校验。
+    const safetyLimits = { ...DEFAULT_WORKFLOW_EXECUTION_LIMITS };
+    for (const key of Object.keys(safetyLimits) as Array<keyof WorkflowExecutionLimits>) {
+      safetyLimits[key] = Math.max(safetyLimits[key], options.limits?.[key] ?? safetyLimits[key]);
+    }
+    assertWorkflowDefinitionBudget(value, { workflowVersions: options.workflowVersions, limits: safetyLimits });
     normalized = normalizeSource(value);
   } catch (error) {
-    return { ok: false, diagnostics: [diagnostic("compile.input", error instanceof Error ? error.message : "工作流输入无效。", { kind: "workflow" })] };
+    return { ok: false, diagnostics: [diagnostic(error instanceof WorkflowResourceLimitError ? error.diagnosticCode : "compile.input", error instanceof Error ? error.message : "工作流输入无效。", { kind: "workflow" })] };
   }
 
   const { draft, source } = normalized;

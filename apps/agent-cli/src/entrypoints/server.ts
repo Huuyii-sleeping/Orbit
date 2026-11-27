@@ -9,6 +9,7 @@ import { resolveAgentHttpHost, resolveAgentHttpPort } from "../service-api/confi
 import { createNestAgentHttpServer } from "../nest/server.js";
 import { createMastraAgentService } from "../bootstrap/mastra-service.js";
 import { getDefaultModel } from "../config/config.js";
+import { resolveAgentDeploymentMode, type AgentDeploymentMode } from "../nest/agent-tenant.middleware.js";
 
 /** CLI/daemon 宿主真正需要的最小 HTTP server 生命周期接口。 */
 export type AgentServerLike = {
@@ -22,6 +23,8 @@ export type AgentServerLike = {
 };
 
 export type RunServerOptions = AgentServiceAuthOptions & {
+  /** HTTP 租户边界；生产强制 SaaS。 */
+  mode?: AgentDeploymentMode;
   /** 监听 IP；缺省只监听本机。 */
   bindAddress?: string;
   /** daemon 自己处理进程信号时关闭 Nest 的重复处理。 */
@@ -36,6 +39,8 @@ export type RunServerOptions = AgentServiceAuthOptions & {
 
 export async function runServer(options: RunServerOptions = {}): Promise<AgentServerLike> {
   const agentServiceToken = resolveAgentServiceToken(options);
+  const mode = resolveAgentDeploymentMode(options.mode);
+  if (mode === "saas" && !agentServiceToken) throw new Error("SaaS Agent requires service credentials");
   const bindAddress = options.bindAddress ?? resolveAgentHttpHost();
   assertAgentServiceListenAddress(bindAddress, agentServiceToken);
   let service = options.service;
@@ -47,7 +52,7 @@ export async function runServer(options: RunServerOptions = {}): Promise<AgentSe
   }
   const server = options.serverFactory
     ? await options.serverFactory(service)
-    : await createNestAgentHttpServer(service, { enableShutdownHooks: options.enableShutdownHooks ?? true, agentServiceToken });
+    : await createNestAgentHttpServer(service, { enableShutdownHooks: options.enableShutdownHooks ?? true, agentServiceToken, mode });
   const targetPort = options.port ?? resolveAgentHttpPort();
   const output = options.output ?? process.stdout;
   await new Promise<void>((resolve, reject) => {

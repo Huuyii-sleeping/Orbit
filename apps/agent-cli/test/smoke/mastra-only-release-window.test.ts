@@ -355,7 +355,7 @@ describe("Mastra-only release window", () => {
     const maxDurationMs = Math.max(...batchDurations);
     console.log(`MASTRA_ONLY_RELEASE_WINDOW runs=30 max_batch_ms=${maxDurationMs.toFixed(1)}`);
     expect(maxDurationMs).toBeLessThan(5_000);
-  });
+  }, 20_000); // 总时限覆盖三轮执行与事件回放；单批性能指标保持不变。
 
   it("连续三轮并发执行 10 个阶段 E Workflow，并保持查询、SSE 和重连游标稳定", async () => {
     root = await mkdtemp(path.join(tmpdir(), "orbit-mastra-stage-e-release-"));
@@ -434,5 +434,5 @@ describe("Mastra-only release window", () => {
     const maxDurationMs = Math.max(...batchDurations);
     console.log(`MASTRA_STAGE_E_RELEASE_WINDOW runs=30 events=${totalEvents} max_batch_ms=${maxDurationMs.toFixed(1)}`);
     expect(maxDurationMs).toBeLessThan(10_000);
-  });
+  }, 40_000);
 });

@@ -1,5 +1,6 @@
 import { createHash } from "node:crypto";
 import type { WorkflowIRParallelNode } from "@orbit/workflow-core";
+import { assertWorkflowOutputBudget, isWorkflowOutputLimitError, WORKFLOW_OUTPUT_LIMITS, WorkflowOutputLimitError } from "@orbit/workflow-core";
 import { createStep, createWorkflow, type AnyWorkflow } from "@mastra/core/workflows";
 import { z } from "zod";
 import {
@@ -30,7 +31,10 @@ export const MASTRA_PARALLEL_BRANCH_DESCRIPTOR_SCHEMA = z.object({
   frame: MASTRA_WORKFLOW_FRAME_SCHEMA,
 });
 
-export const MASTRA_PARALLEL_BRANCH_DESCRIPTORS_SCHEMA = z.array(MASTRA_PARALLEL_BRANCH_DESCRIPTOR_SCHEMA);
+export const MASTRA_PARALLEL_BRANCH_DESCRIPTORS_SCHEMA = z.array(MASTRA_PARALLEL_BRANCH_DESCRIPTOR_SCHEMA).transform((items) => {
+  assertWorkflowOutputBudget(items, WORKFLOW_OUTPUT_LIMITS.frameBytes);
+  return items;
+});
 
 const MASTRA_PARALLEL_ERROR_SCHEMA = z.object({
   code: z.string(),
@@ -67,7 +71,10 @@ export const MASTRA_PARALLEL_BRANCH_RESULT_SCHEMA = z.discriminatedUnion("status
 
 export type MastraParallelBranchResult = z.infer<typeof MASTRA_PARALLEL_BRANCH_RESULT_SCHEMA>;
 
-export const MASTRA_PARALLEL_BRANCH_RESULTS_SCHEMA = z.array(MASTRA_PARALLEL_BRANCH_RESULT_SCHEMA);
+export const MASTRA_PARALLEL_BRANCH_RESULTS_SCHEMA = z.array(MASTRA_PARALLEL_BRANCH_RESULT_SCHEMA).transform((items) => {
+  assertWorkflowOutputBudget(items, WORKFLOW_OUTPUT_LIMITS.frameBytes);
+  return items;
+});
 
 export const MASTRA_PARALLEL_MERGE_INPUT_SCHEMA = z.object({
   frame: MASTRA_WORKFLOW_FRAME_SCHEMA,
@@ -294,6 +301,7 @@ export function mergeParallelBranchResults(
       return { branchId: branch.id, label: branch.label, order: branch.order, status: "skipped" };
     });
   const failed = ordered.find((result) => result.status === "failed");
+  if (ordered.some((result) => result.status === "failed" && isWorkflowOutputLimitError(result.error))) throw new WorkflowOutputLimitError();
   if (failed?.status === "failed" && node.config.failurePolicy === "fail-fast") {
     throw Object.assign(new Error(failed.error.message), { code: failed.error.code, branchId: failed.branchId });
   }
@@ -310,6 +318,8 @@ export function mergeParallelBranchResults(
   const aggregation = node.merge.strategy === "ordered"
     ? summaries
     : Object.fromEntries(summaries.map(({ branchId, ...summary }) => [branchId, summary]));
+  assertWorkflowOutputBudget({ branches: summaries }, WORKFLOW_OUTPUT_LIMITS.nodeBytes);
+  assertWorkflowOutputBudget({ result: aggregation }, WORKFLOW_OUTPUT_LIMITS.nodeBytes);
   return {
     ...parentFrame,
     nodeOutputs: {

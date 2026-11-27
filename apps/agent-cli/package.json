@@ -45,6 +45,7 @@
     "test:models:live": "tsx test/smoke/live-model-smoke.ts"
   },
   "dependencies": {
+    "@libsql/client": "0.17.4",
     "@mastra/core": "1.52.1",
     "@mastra/libsql": "1.17.0",
     "@mastra/mcp": "1.2.0",

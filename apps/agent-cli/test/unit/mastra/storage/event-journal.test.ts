@@ -3,6 +3,7 @@ import { tmpdir } from "node:os";
 import path from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
 import { OrbitRuntimeEventJournal } from "../../../../src/mastra/storage/event-journal.js";
+import { WORKFLOW_OUTPUT_LIMITS, WorkflowOutputLimitError } from "@orbit/workflow-core";
 
 let root = "";
 
@@ -12,6 +13,37 @@ afterEach(async () => {
 });
 
 describe("mastra/storage/event-journal", () => {
+  it("超限事件不会落盘、通知或占用 id，重启后总字节预算仍生效并预留失败终态", async () => {
+    root = await mkdtemp(path.join(tmpdir(), "orbit-journal-budget-"));
+    let journal = new OrbitRuntimeEventJournal({ root, persistenceEnabled: true });
+    let notified = 0;
+    journal.subscribeWorkflow("budget", () => notified++);
+    const oversized = { type: "node.output" as const, nodeId: "n", output: { text: "x".repeat(WORKFLOW_OUTPUT_LIMITS.eventBytes) } };
+    await expect(journal.appendWorkflow("other", oversized)).rejects.toMatchObject({ code: "WORKFLOW_OUTPUT_LIMIT_EXCEEDED" });
+    expect(await journal.listWorkflow("other")).toEqual([]);
+    const event = { type: "node.output" as const, nodeId: "n", output: { text: "x".repeat(1_000_000) } };
+    for (let i = 0; i < 4; i++) await journal.appendWorkflow("budget", event);
+    expect(notified).toBe(4);
+    journal = new OrbitRuntimeEventJournal({ root, persistenceEnabled: true });
+    for (let i = 0; i < 4; i++) await journal.appendWorkflow("budget", event);
+    await expect(journal.appendWorkflow("budget", event)).rejects.toMatchObject({ code: "WORKFLOW_OUTPUT_LIMIT_EXCEEDED" });
+    const failure = new WorkflowOutputLimitError();
+    const terminal = { type: "run.status" as const, status: "failed" as const, error: { code: failure.code, message: failure.message } };
+    expect(await journal.appendWorkflow("budget", terminal)).toMatchObject({ id: 9, status: "failed" });
+    expect(await journal.appendWorkflow("budget", terminal)).toMatchObject({ id: 9 });
+    const restored = new OrbitRuntimeEventJournal({ root, persistenceEnabled: true });
+    await expect(restored.appendWorkflow("budget", { type: "node.log", nodeId: "n", level: "info", message: "small" })).rejects.toMatchObject({ code: "WORKFLOW_OUTPUT_LIMIT_EXCEEDED" });
+    expect((await restored.listWorkflow("budget", 8))).toMatchObject([{ id: 9, status: "failed" }]);
+  });
+
+  it("大量小事件并发写入也不能突破条数限制，固定失败事件可在额度用尽后写入", async () => {
+    const journal = new OrbitRuntimeEventJournal({ persistenceEnabled: false });
+    for (let i = 0; i < WORKFLOW_OUTPUT_LIMITS.journalEvents - 1; i++) await journal.appendWorkflow("count", { type: "node.log", nodeId: "n", level: "info", message: "x" });
+    const results = await Promise.allSettled(Array.from({ length: 3 }, () => journal.appendWorkflow("count", { type: "node.log", nodeId: "n", level: "info", message: "x" })));
+    expect(results.filter((result) => result.status === "fulfilled")).toHaveLength(1);
+    const error = new WorkflowOutputLimitError();
+    expect(await journal.appendWorkflow("count", { type: "run.status", status: "failed", error: { code: error.code, message: error.message } })).toMatchObject({ id: WORKFLOW_OUTPUT_LIMITS.journalEvents + 1 });
+  });
   it("allocates monotonic ids per domain/run and restores persisted events", async () => {
     root = await mkdtemp(path.join(tmpdir(), "orbit-mastra-journal-"));
     const first = new OrbitRuntimeEventJournal({ root });

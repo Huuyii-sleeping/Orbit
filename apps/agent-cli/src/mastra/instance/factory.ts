@@ -9,6 +9,7 @@ import { createOrbitMastraMemory, ORBIT_MASTRA_MEMORY_KEY } from "../memory/inde
 import { ensureMastraRuntimePaths, resolveMastraRuntimePaths, type MastraRuntimePaths } from "../storage/paths.js";
 import { MASTRA_TOOL_REGISTRY } from "../tools/index.js";
 import { MASTRA_WORKFLOW_REGISTRY } from "../workflows/index.js";
+import { installWorkflowSnapshotBudget } from "../storage/workflow-snapshot-budget.js";
 
 export type SharedMastraRuntime = {
   mastra: Mastra;
@@ -60,7 +61,13 @@ async function createMastraRuntime(options: MastraRuntimeOptions): Promise<Share
     id: "orbit-mastra-storage-v1",
     url: persistenceEnabled ? paths.databaseUrl : ":memory:",
   });
-  await storage.init();
+  try {
+    await storage.init();
+    if (persistenceEnabled) await installWorkflowSnapshotBudget(paths.databaseUrl);
+  } catch (error) {
+    await storage.close();
+    throw error;
+  }
   const memory = createOrbitMastraMemory(storage);
   const mastra = new Mastra({
     agents: MASTRA_AGENT_REGISTRY,

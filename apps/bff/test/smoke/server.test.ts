@@ -201,9 +201,10 @@ async function startMockSkillRegistry(): Promise<{ registryUrl: string }> {
   return { registryUrl: `${await listen(server)}/registry.json` };
 }
 
-async function startSlowSkillRegistry(): Promise<{ registryUrl: string; releasePackage: () => void }> {
+async function startSlowSkillRegistry(): Promise<{ registryUrl: string; packageRequested: Promise<void>; releasePackage: () => void }> {
   let baseUrl = "";
-  let releasePackage: () => void = () => {};
+  const requested = Promise.withResolvers<void>();
+  const released = Promise.withResolvers<void>();
   const packageRaw = JSON.stringify({
     files: [
       {
@@ -250,16 +251,15 @@ async function startSlowSkillRegistry(): Promise<{ registryUrl: string; releaseP
       return;
     }
     if (req.method === "GET" && url.pathname === "/slow.package.json") {
-      await new Promise<void>((resolve) => {
-        releasePackage = resolve;
-      });
+      requested.resolve();
+      await released.promise;
       json(res, 200, JSON.parse(packageRaw));
       return;
     }
     json(res, 404, { ok: false });
   });
   baseUrl = await listen(server);
-  return { registryUrl: `${baseUrl}/registry.json`, releasePackage: () => releasePackage() };
+  return { registryUrl: `${baseUrl}/registry.json`, packageRequested: requested.promise, releasePackage: () => released.resolve() };
 }
 
 async function startMockSkillRegistryService(adminToken?: string): Promise<{ baseUrl: string; downloads: string[]; adminAuthorizations: string[] }> {
@@ -1499,14 +1499,16 @@ describe("bff server", () => {
     });
 
     const firstDownload = requestJson(`${bffBaseUrl}/api/skills/slow-remote/download`, { method: "POST" });
-    await new Promise((resolve) => setTimeout(resolve, 50));
-
-    await expect(requestJson(`${bffBaseUrl}/api/skills/slow-remote/download`, { method: "POST" })).resolves.toMatchObject({
-      status: 409,
-      body: { ok: false, error: { code: "SKILL_LIFECYCLE_BUSY" } },
-    });
-
-    remote.releasePackage();
+    try {
+      // 等待首个请求实际持锁并访问包，避免固定延时导致两个请求顺序反转。
+      await remote.packageRequested;
+      await expect(requestJson(`${bffBaseUrl}/api/skills/slow-remote/download`, { method: "POST" })).resolves.toMatchObject({
+        status: 409,
+        body: { ok: false, error: { code: "SKILL_LIFECYCLE_BUSY" } },
+      });
+    } finally {
+      remote.releasePackage();
+    }
     await expect(firstDownload).resolves.toMatchObject({
       status: 200,
       body: { ok: true, skill: { id: "slow-remote", status: "downloaded" } },

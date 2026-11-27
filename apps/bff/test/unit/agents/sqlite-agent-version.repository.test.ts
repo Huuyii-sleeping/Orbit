@@ -66,6 +66,12 @@ describe("SqliteAgentVersionRepository", () => {
     const beta = { issuer: "issuer", tenantId: "org-b", subject: "u1" };
     try {
       expect(() => repository.list()).toThrow(/tenant context/i);
+      expect(() => runWithTenant(alpha, () => repository.publish(snapshot("shared-profile", "无主版本"))))
+        .toThrow(/tenant agent profile is required/i);
+      const insertProfile = database.database.prepare(`insert into agent_profiles
+        (issuer, tenant_id, id, revision, profile_json, created_at, updated_at)
+        values (?, ?, 'shared-profile', 0, '{}', 1, 1)`);
+      insertProfile.run(alpha.issuer, alpha.tenantId);
       const alphaVersion = runWithTenant(alpha, () => {
         expect(repository.getById(localVersion.id)).toBeUndefined();
         return repository.publish(snapshot("shared-profile", "组织 A"));
@@ -73,6 +79,7 @@ describe("SqliteAgentVersionRepository", () => {
       runWithTenant(beta, () => {
         expect(repository.getById(alphaVersion.id)).toBeUndefined();
         expect(repository.resolvePublishedVersion("shared-profile", alphaVersion.id)).toBeUndefined();
+        insertProfile.run(beta.issuer, beta.tenantId);
         const own = repository.publish(snapshot("shared-profile", "组织 B"));
         expect(own.version).toBe(1);
         expect(repository.list("shared-profile")).toEqual([own]);

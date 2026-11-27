@@ -2,6 +2,7 @@ import { createHash } from "node:crypto";
 import { Script, createContext } from "node:vm";
 import { createStep, createWorkflow, type AnyWorkflow } from "@mastra/core/workflows";
 import type { WorkflowIRLoopNode } from "@orbit/workflow-core";
+import { assertWorkflowOutputBudget, WORKFLOW_OUTPUT_LIMITS } from "@orbit/workflow-core";
 import {
   MASTRA_WORKFLOW_FRAME_SCHEMA,
   createMastraBranchMergeStep,
@@ -86,6 +87,7 @@ export async function advanceLoopFrame(
     throw new Error(`Loop ${node.id} 缺少已初始化的容器上下文。`);
   }
   const outputs = await collectLoopBodyOutputs(node, frame);
+  assertWorkflowOutputBudget(outputs, WORKFLOW_OUTPUT_LIMITS.nodeBytes);
   const variables = { ...current.variables };
   for (const variable of node.config.initialVariables) {
     if (Object.prototype.hasOwnProperty.call(outputs, variable.id)) variables[variable.id] = outputs[variable.id];
@@ -111,9 +113,11 @@ export function mergeLoopFrame(
   loopFrame: MastraWorkflowFrame,
 ): MastraWorkflowFrame {
   const outputs = loopFrame.containerContexts[node.id]?.previousOutputs ?? {};
+  assertWorkflowOutputBudget(outputs, WORKFLOW_OUTPUT_LIMITS.nodeBytes);
   const nodeOutput = node.config.body.outputs.length > 0
     ? Object.fromEntries(node.config.body.outputs.map((output) => [`output:${output.id}`, outputs[output.id]]))
     : { result: outputs };
+  assertWorkflowOutputBudget(nodeOutput, WORKFLOW_OUTPUT_LIMITS.nodeBytes);
   return {
     ...parentFrame,
     nodeOutputs: { ...parentFrame.nodeOutputs, ...loopFrame.nodeOutputs, [node.id]: nodeOutput },

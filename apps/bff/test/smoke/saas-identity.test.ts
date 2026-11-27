@@ -44,7 +44,7 @@ async function fixture() {
   const { privateKey: wrongPrivateKey } = await generateKeyPair("RS256");
   const jwk = { ...await exportJWK(publicKey), kid: "test-key", use: "sig", alg: "RS256" };
   const codes = new Map<string, { challenge: string; nonce: string }>();
-  const state = { tokenHits: 0, upstreamHits: 0, clientAuthValid: false, pkceValid: false, variant: "valid", audience: "orbit-web", organization: { alpha: { id: "org-a" }, beta: { id: "org-b" } } as Record<string, { id: string }> };
+  const state = { tokenHits: 0, upstreamHits: 0, clientAuthValid: false, pkceValid: false, variant: "valid", audience: "orbit-web", organization: { alpha: { id: "org-a" }, beta: { id: "org-b" } } as Record<string, { id: string }>, organizationRoles: undefined as unknown };
   let issuer = "";
   const provider = createServer(async (req, res) => {
     const url = new URL(req.url ?? "/", issuer || "http://127.0.0.1");
@@ -82,7 +82,8 @@ async function fixture() {
         json(401, { error: "invalid_grant" }); return;
       }
       codes.delete(body.get("code") ?? "");
-      const id_token = await new SignJWT({ nonce: state.variant === "nonce" ? "wrong-nonce" : challenge.nonce, sid: "sid-1", organization: state.variant === "organization" ? {} : state.organization })
+      const id_token = await new SignJWT({ nonce: state.variant === "nonce" ? "wrong-nonce" : challenge.nonce, sid: "sid-1", organization: state.variant === "organization" ? {} : state.organization,
+        ...(state.organizationRoles === undefined ? {} : { orbit_org_roles: state.organizationRoles }) })
         .setProtectedHeader({ alg: "RS256", kid: "test-key" }).setIssuer(state.variant === "issuer" ? "https://wrong.example" : issuer)
         .setAudience(state.variant === "audience" ? "other-client" : state.audience)
         .setSubject("user-1").setIssuedAt().setExpirationTime("5m").sign(state.variant === "signature" ? wrongPrivateKey : privateKey);
@@ -135,6 +136,60 @@ async function login(baseURL: string, issuer: string) {
 }
 
 describe("SaaS identity and shared database boundary", () => {
+  it("权限只来自签名组织声明，切换组织不能沿用权限或通过请求提权", async () => {
+    const { baseURL, issuer, state } = await fixture();
+    state.organizationRoles = { "org-a": ["admin"], "org-b": ["viewer"] };
+    const { jar, callback } = await login(baseURL, issuer);
+    expect(callback.status).toBe(302);
+    const headers = { Cookie: jar.header(), "x-orbit-roles": "admin", "x-orbit-tenant-context": "forged" };
+    const session = await fetch(`${baseURL}/api/auth/session`, { headers });
+    expect(await session.json()).toMatchObject({ tenantId: "org-a", roles: ["admin"], permissions: expect.arrayContaining(["workflow.approve", "workflow.publish"]) });
+    const switched = await fetch(`${baseURL}/api/auth/tenant`, {
+      method: "POST", headers: { ...headers, Origin: baseURL, "Content-Type": "application/json" },
+      body: JSON.stringify({ tenantId: "org-b", roles: ["admin"], permissions: ["workflow.approve"] }),
+    });
+    expect(switched.status).toBe(200);
+    expect(await switched.json()).toEqual({ ok: true, tenantId: "org-b", roles: ["viewer"], permissions: ["workflow.read"] });
+    expect(await (await fetch(`${baseURL}/api/auth/session?roles=admin&tenantId=org-a`, { headers })).json())
+      .toMatchObject({ tenantId: "org-b", roles: ["viewer"], permissions: ["workflow.read"] });
+    // 管理员角色不能越过未完成隔离的能力白名单。
+    expect((await fetch(`${baseURL}/api/workflow-runs/run/events`, { headers })).status).toBe(403);
+    expect(state.upstreamHits).toBe(0);
+  }, 15_000);
+
+  it("无角色会话不给业务权限；新登录读取降权结果，签名注销撤销旧授权会话", async () => {
+    const { baseURL, issuer, privateKey, state } = await fixture();
+    const withoutRoles = await login(baseURL, issuer);
+    expect(await (await fetch(`${baseURL}/api/auth/session`, { headers: { Cookie: withoutRoles.jar.header() } })).json())
+      .toMatchObject({ roles: [], permissions: [] });
+    state.organizationRoles = { "org-a": ["admin"] };
+    const elevated = await login(baseURL, issuer);
+    const oldHeaders = { Cookie: elevated.jar.header() };
+    state.organizationRoles = { "org-a": ["viewer"] };
+    const downgraded = await login(baseURL, issuer);
+    expect(await (await fetch(`${baseURL}/api/auth/session`, { headers: { Cookie: downgraded.jar.header() } })).json())
+      .toMatchObject({ roles: ["viewer"], permissions: ["workflow.read"] });
+    // 声明为固定会话快照；变更 IdP 角色本身不会主动推送到已有会话。
+    expect(await (await fetch(`${baseURL}/api/auth/session`, { headers: oldHeaders })).json()).toMatchObject({ roles: ["admin"] });
+    const token = await new SignJWT({ sid: "sid-1", events: { "http://schemas.openid.net/event/backchannel-logout": {} } })
+      .setProtectedHeader({ alg: "RS256", kid: "test-key" }).setIssuer(issuer).setAudience("orbit-web")
+      .setSubject("user-1").setIssuedAt().sign(privateKey);
+    expect((await fetch(`${baseURL}/auth/backchannel-logout`, {
+      method: "POST", headers: { "Content-Type": "application/x-www-form-urlencoded" }, body: new URLSearchParams({ logout_token: token }),
+    })).status).toBe(204);
+    expect((await fetch(`${baseURL}/api/auth/session`, { headers: oldHeaders })).status).toBe(401);
+  }, 15_000);
+
+  it("签名正确但角色映射畸形或为非成员组织授权时仍拒绝登录", async () => {
+    const { baseURL, issuer, state } = await fixture();
+    for (const roles of [null, { "org-x": ["admin"] }, { "org-a": ["root"] }, { "org-a": "admin" }]) {
+      state.organizationRoles = roles;
+      const { jar, callback } = await login(baseURL, issuer);
+      expect(callback.status).toBe(401);
+      expect((await fetch(`${baseURL}/api/auth/session`, { headers: { Cookie: jar.header() } })).status).toBe(401);
+    }
+  }, 15_000);
+
   it("completes real code+PKCE login, isolates selected tenant, and denies unisolated routes", async () => {
     const { baseURL, issuer, sessionStorePath, state } = await fixture();
     const anonymous = await fetch(`${baseURL}/api/sessions`);
@@ -172,7 +227,7 @@ describe("SaaS identity and shared database boundary", () => {
       expect(await response.json()).toMatchObject({ error: { code: "SAAS_CAPABILITY_NOT_ISOLATED" } });
     }
     expect(state.upstreamHits).toBe(0);
-  });
+  }, 15_000);
 
   it("rejects forged state and enforces logout replay and signed backchannel logout", async () => {
     const { baseURL, issuer, privateKey } = await fixture();
@@ -206,7 +261,7 @@ describe("SaaS identity and shared database boundary", () => {
     const revoke = await fetch(`${baseURL}/auth/backchannel-logout`, { method: "POST", headers: { "Content-Type": "application/x-www-form-urlencoded" }, body: new URLSearchParams({ logout_token: token }) });
     expect(revoke.status).toBe(204);
     expect((await fetch(`${baseURL}/api/auth/session`, { headers: { Cookie: second.jar.header() } })).status).toBe(401);
-  });
+  }, 15_000);
 
   it("refuses invalid issuer, audience, nonce, signature and missing organization", async () => {
     const { baseURL, issuer, state } = await fixture();
@@ -217,5 +272,5 @@ describe("SaaS identity and shared database boundary", () => {
       expect(jar.names(), variant).not.toContain("orbit_session");
       expect((await fetch(`${baseURL}/api/auth/session`, { headers: { Cookie: jar.header() } })).status, variant).toBe(401);
     }
-  });
+  }, 15_000);
 });

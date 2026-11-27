@@ -40,7 +40,7 @@ export class AppModule {
         skills,
         sops,
         runs,
-        AgentsModule.register({ store, versions, skills, runs, runtime }),
+        AgentsModule.register({ store, database, versions, skills, runs, runtime }),
       ],
     };
   }

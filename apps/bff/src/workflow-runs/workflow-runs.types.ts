@@ -30,7 +30,9 @@ export type { WorkflowNodeRunSnapshot, WorkflowRunSnapshot };
 
 /** Repository 只保存 Agent 产生的运行事实，不执行节点。 */
 export interface WorkflowRunsRepository {
-  saveRun(run: WorkflowRunSnapshot): void;
+  saveRun(run: WorkflowRunSnapshot, initiatedBy?: string): void;
+  /** 由可信启动身份写入，历史未绑定记录返回 null，不能通过后续快照改写。 */
+  getInitiator(runId: string): string | null;
   getRun(runId: string): WorkflowRunSnapshot | null;
   /** 读取指定工作流的近期运行投影。 */
   listByWorkflow(workflowId: string, limit?: number): WorkflowRunSnapshot[];

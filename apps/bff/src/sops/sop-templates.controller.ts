@@ -1,3 +1,5 @@
+import { OrganizationAuthorizationError } from "../identity/organization-authorization.js";
+import { WorkflowResourceLimitError } from "@orbit/workflow-core";
 import { Body, Controller, Delete, Get, Inject, Param, Post, Put, Query, Res } from "@nestjs/common";
 import type { ServerResponse } from "node:http";
 import { errorPayload, writeJson } from "../http/http-utils.js";
@@ -9,8 +11,8 @@ async function respond(res: ServerResponse, statusCode: number, action: () => un
   try {
     writeJson(res, statusCode, { ok: true, data: await action() });
   } catch (error) {
-    if (error instanceof SopDomainError) {
-      writeJson(res, error.statusCode, errorPayload(error.code, error.message, error.metadata));
+    if (error instanceof SopDomainError || error instanceof OrganizationAuthorizationError || error instanceof WorkflowResourceLimitError) {
+      writeJson(res, error.statusCode, errorPayload(error.code, error.message, "metadata" in error ? error.metadata : {}));
       return;
     }
     writeJson(res, 500, errorPayload("SOP_INTERNAL_ERROR", error instanceof Error ? error.message : String(error)));

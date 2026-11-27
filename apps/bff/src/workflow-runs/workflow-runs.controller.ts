@@ -1,3 +1,5 @@
+import { OrganizationAuthorizationError } from "../identity/organization-authorization.js";
+import { WorkflowResourceLimitError } from "@orbit/workflow-core";
 import { Body, Controller, Get, Inject, Param, Post, Req, Res } from "@nestjs/common";
 import type { IncomingMessage, ServerResponse } from "node:http";
 import { errorPayload, writeJson } from "../http/http-utils.js";
@@ -9,8 +11,9 @@ async function respond(res: ServerResponse, statusCode: number, action: () => Pr
   try {
     writeJson(res, statusCode, { ok: true, data: await action() });
   } catch (error) {
-    if (error instanceof WorkflowRunControlError) {
-      writeJson(res, error.statusCode, errorPayload(error.code, error.message, error.metadata));
+    if (error instanceof WorkflowRunControlError || error instanceof OrganizationAuthorizationError || error instanceof WorkflowResourceLimitError) {
+      if (error instanceof WorkflowRunControlError && error.statusCode === 429) res.setHeader("Retry-After", String(error.metadata.retryAfterSeconds ?? 60));
+      writeJson(res, error.statusCode, errorPayload(error.code, error.message, "metadata" in error ? error.metadata : {}));
       return;
     }
     writeJson(res, 500, errorPayload("WORKFLOW_RUN_INTERNAL_ERROR", error instanceof Error ? error.message : String(error)));
@@ -32,8 +35,8 @@ export class WorkflowRunsController {
     try {
       await this.service.stream(id, req, res);
     } catch (error) {
-      if (error instanceof WorkflowRunControlError) {
-        writeJson(res, error.statusCode, errorPayload(error.code, error.message, error.metadata));
+      if (error instanceof WorkflowRunControlError || error instanceof OrganizationAuthorizationError) {
+        writeJson(res, error.statusCode, errorPayload(error.code, error.message, "metadata" in error ? error.metadata : {}));
         return;
       }
       writeJson(res, 500, errorPayload("WORKFLOW_RUN_INTERNAL_ERROR", error instanceof Error ? error.message : String(error)));
