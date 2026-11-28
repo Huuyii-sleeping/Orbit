@@ -25,7 +25,7 @@ Web → BFF → Agent Service → Runtime Ports → Mastra → 模型 / 工具 /
 
 Web 只访问 BFF 的 `/api/*`。产品层使用共享契约，Mastra 的内部类型和执行状态留在运行时适配层。生产运行时锁定为 `@mastra/core@1.52.1`。
 
-对外 SaaS 的认证、租户隔离现状和部署要求见 [SaaS 身份说明](docs/saas-identity.md)。当前 SaaS 模式仅开放已隔离的身份和个人配置接口，其余业务接口会拒绝访问。
+对外 SaaS 的认证、租户隔离现状和部署要求见 [SaaS 身份说明](docs/saas-identity.md)。默认仅开放身份和个人配置接口；SaaS `/studio` 已支持登录、组织选择和受限审批工作流，预发布联调可显式启用 [受限 Workflow 入口](docs/workflow-authenticated-entrypoint.md)，生产 IdP 与部署验收仍待完成。
 
 服务端后续开发按 [Server 开发路线与进度](docs/server-development-roadmap.md) 推进，文档包含当前状态、阶段任务、验收条件和代码入口，可在侧边栏打开并随开发更新。
 

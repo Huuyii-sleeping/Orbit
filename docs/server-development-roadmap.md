@@ -1,6 +1,6 @@
 # Orbit Server 开发路线与进度
 
-> 更新日期：2026-11-27。适用目标：共享服务、共享数据库的对外 SaaS。
+> 更新日期：2026-11-28。适用目标：共享服务、共享数据库的对外 SaaS。
 >
 > 当前工作分支：`codex/server-hardening-phase2`。本页记录该分支的实现、验收结果与后续目标，不代表已经部署上线。
 
@@ -12,11 +12,11 @@
 
 | 现在最需要知道的事 | 当前答案 |
 | --- | --- |
-| 已经能对外使用完整工作台了吗？ | 不能。SaaS 浏览器接口目前只开放身份、个人资料和设置 |
-| 最近为什么没有明显页面变化？ | 主要在补数据归属、身份传递和 Runtime 越权检查 |
-| 下一步开发什么？ | **M1-C 已通过当前单 BFF、单 Agent 范围的代码与自动化回归验收；下一阶段是 M1-D 完整认证业务链路与部署验收** |
+| 已经能对外使用完整工作台了吗？ | 不能。默认只开放身份、个人资料和设置；预发布可显式启用受限 Workflow API |
+| 页面现在能看到什么？ | SaaS `/studio` 提供登录、组织选择、受限工作流创建/发布/运行和独立审批 |
+| 下一步开发什么？ | **M1-D 的真实浏览器闭环已通过；下一步按 10 个组织、峰值 10 个运行验收目标部署** |
 | 下一步完成后能看到什么？ | 登录后，按组织和权限创建、运行、审批一个受限工作流 |
-| 现在还缺什么？ | 真实 IdP 全链路与生产容量验收，以及后续模型凭据、Session/Memory、技能与工具隔离 |
+| 现在还缺什么？ | 目标部署的 IdP/HTTPS、生产容量及长期运行验收，以及后续模型凭据、Session/Memory、技能与工具隔离 |
 
 ### 阅读导航
 
@@ -35,7 +35,7 @@
 | --- | --- | --- |
 | 身份提供方 IdP | 用户是谁，属于哪些组织？ | 登录结果证明 Alice 是 A 的成员 |
 | BFF 身份入口 | 登录凭据是否有效，当前选择哪个组织？ | 建立可信的用户与组织上下文 |
-| BFF 业务服务 | 此人能否执行此操作？ | 已检查编辑、运行、发布和审批权限，禁止发起人自审批；真实 IdP 联调待验收 |
+| BFF 业务服务 | 此人能否执行此操作？ | 已检查编辑、运行、发布和审批权限，禁止发起人自审批；真实 Keycloak/HTTPS 隔离验收通过 |
 | 产品数据库 | 数据属于谁，关联是否仍在同一组织？ | 草稿、版本、运行和事件都带组织归属 |
 | BFF → Agent | 执行服务如何获得可信身份？ | BFF 从已验证上下文生成服务身份，而非采信浏览器参数 |
 | Agent / Runtime | 当前组织能否读写这个运行？ | Mallory 的查询、取消、恢复和 SSE 均被拒绝 |
@@ -56,14 +56,15 @@
 | 能力 | 已有实现 | 仍需注意的边界 |
 | --- | --- | --- |
 | 基础稳定性 | 前期已进行并发、一致性与技能运行相关加固 | 属于持续建设，没有“以后不会故障”的保证 |
-| 用户登录 | `express-openid-connect` 处理 OIDC；`jose` 校验签名与声明 | 推荐 Keycloak Organizations；真实 IdP 部署和联调仍需验收 |
+| 用户登录 | `express-openid-connect` 处理 OIDC；`jose` 校验签名与声明 | 已验证 Keycloak 26.4.7 Organizations 与 HTTPS；实际目标环境仍需验收 |
 | 身份与组织上下文 | 服务端保存已验证的 issuer、组织 ID、用户 ID | 不能由浏览器 body/header 指定可信身份 |
-| 组织操作权限（M1-A/M1-B） | 从签名组织角色计算权限，SOP/Workflow service 检查操作权限；记录可信发起人并禁止自审批，控制操作留审计 | 浏览器业务入口仍关闭，真实 IdP 部署待验收 |
+| 组织操作权限（M1-A/M1-B） | 从签名组织角色计算权限，SOP/Workflow service 检查操作权限；记录可信发起人并禁止自审批，控制操作留审计 | 默认业务入口关闭；活动 SSE 绑定持久化会话版本，目标部署待验收 |
 | 运行资源边界（M1-C） | 输入、静态展开、节点/流式输出、frame、单 run 事件 journal、产品/原生快照受限；资源失败可查询与回放 | 不能代替进程 CPU/内存隔离或全库容量治理 |
 | 组织配额与连接治理（M1-C） | 原子预留每组织 5 个、Agent 总计 50 个未完成运行，waiting 和重启遗留记录计入；分类 HTTP 限流，SSE 每组织 8 条、进程总计 128 条 | 单 BFF、单 Agent，Agent 独占目录；HTTP 内存窗口重启清零，多副本须换共享 Store；默认值尚非生产容量承诺 |
 | 草稿与模板写入审计（M1-C） | 创建、保存、删除、导入及派生留可信操作人和固定 mutation；成功审计与业务写入同一 SQLite 事务 | 不记录正文；审计总容量、保留期和归档仍待治理 |
 | 产品数据归属 | v7 覆盖 SOP 草稿、版本、模板、AgentVersion；v8 覆盖运行、节点、事件和组织 Profile | 历史本地数据保留在旧命名空间，不自动分配给租户 |
-| BFF 运行访问 | 查询、取消、恢复、订阅前检查当前组织的本地运行记录 | 浏览器业务 API 白名单尚未开放 |
+| BFF 运行访问 | 查询、取消、恢复、订阅前检查当前组织的本地运行记录；测试 IdP 登录到真实 Agent 的完整 HTTP 链路通过 | `restricted` 配置只开放首批精确路径，默认关闭；非完整工作台开放 |
+| 审批策略与发布（M1-D 第一批） | 发布和启动复用固定策略 `organization.workflow.approve`，未知策略拒绝；审批继续校验角色、组织与非发起人 | 暂无自定义审批人或审批组；本地宿主保留原行为 |
 | 服务间身份传递 | JSON 与 SSE 请求从可信上下文生成租户 header | header 是编码载体，信任依赖服务 Bearer 凭据和受控传输，本身不是签名 token |
 | Runtime 运行归属 | 创建时持久化组织，后续校验归属并保持不可变 | BFF 按组织角色授权；内部 Runtime 信任受控服务并检查组织归属，不能向浏览器暴露服务凭据 |
 | 重启与审批恢复 | 真实 Agent 子进程测试覆盖重启、审批幂等和终态 SSE 回放 | Runtime 元数据仍要求单进程使用运行目录 |
@@ -78,14 +79,15 @@
 | 验证 | 记录 |
 | --- | --- |
 | `pnpm build` | 全仓构建通过 |
-| `pnpm --workspace-concurrency=1 -r test --maxWorkers=2 --minWorkers=1` | 按包串行、限制测试进程后，1,023 项通过：Agent 603、BFF 152、Web 178、共享包与 Registry 90 |
+| `pnpm --workspace-concurrency=1 -r test --maxWorkers=2 --minWorkers=1` | 按包串行、限制测试进程后，1,035 项通过、1 项 live 跳过：Agent 604、BFF 163、Web 178、共享包与 Registry 90 |
+| `pnpm test:identity:keycloak` | 独立执行 1 项 live：真实 Keycloak 26.4.7 + TLS 代理 + 生产模式 BFF + 真实 Agent 通过；包含并发准入、SIGKILL 恢复和高频查询，不计入上面的 1,035 项 |
 | `pnpm check:structure` | 目录结构检查通过 |
 | `pnpm check:workflow-boundaries` | 工作流依赖边界检查通过 |
 | `git diff --check` | 无空白错误 |
 
-真实进程 smoke 的范围是 **BFF 的 AgentProxyService → 独立 Agent HTTP 进程 → Mastra**，覆盖跨组织/跨 issuer 拒绝、重启、同组织审批恢复、重复审批和 SSE 回放。它不等于已经验证“真实 IdP 登录 → 浏览器 → 完整 BFF 业务接口”的全链路。
+原有服务间 smoke 覆盖 **BFF 的 AgentProxyService → 独立 Agent HTTP 进程 → Mastra**。新增 [完整入口回归](../apps/bff/test/smoke/m1d-full-entrypoint.test.ts) 使用测试 IdP 的真实授权码/PKCE 登录、会话 Cookie、生产 BFF 装配、产品 SQLite 与独立 Agent，覆盖发布、生产运行、组织切换和跨组织拒绝、自审批、重复审批冲突、BFF/Agent 重启、SSE 游标回放及注销后的旧 Cookie。另有真实 Keycloak/HTTPS 的独立验收命令，覆盖安全 Cookie、组织声明、降权、成员移除和真实签名后通道注销；仍不等于用户目标环境或浏览器页面验收。
 
-以上记录已更新至 2026-11-27 的提交前验收。HTTP 权限回归通过测试宿主注入可信身份，验证 Nest 模块装配、403/404 映射和 service 权限边界；真实 Agent 进程回归覆盖输入与输出超限、失败终态 SSE、并发准入、waiting 重启后仍占额、取消释放、频率拒绝和 SSE 断线恢复。BFF 回归验证上游 429 与 Retry-After 传递，数据库回归验证草稿审计失败回滚。完整 OIDC → BFF 业务 → Agent 链路仍待 M1-D。后续代码变化后必须重新执行适用验证。
+以上记录已更新至 2026-11-27 的 [M1 完整验收](m1-acceptance-report.md)。本轮新增真实并发、进程异常退出和请求突发场景，发现并修复发布旧修订、并发审批在终态持久化窗口错误冲突、前端 autosave 被受限入口拒绝三处问题。构建、常规回归和独立 Keycloak/HTTPS 验收均通过；页面的登录/组织接入以及目标部署和容量仍待完成，不据此勾选整个 M1。
 
 测试中仍可见 Mastra/LibSQL 关闭时的 `SQLITE_BUSY` checkpoint 警告；本轮重启与恢复回归通过，未把警告抑制或作为“没有存储风险”的证据。部署时的并发负载和故障恢复仍需独立验收。
 
@@ -104,6 +106,11 @@
 | Runtime 持久化归属 | [workflow-run-repository.ts](../apps/agent-cli/src/mastra/storage/workflow-run-repository.ts) |
 | HTTP 限流与 SSE 槽位 | [tenant-http-limits.ts](../packages/service-auth/src/tenant-http-limits.ts) |
 | 控制与草稿写入审计 | [organization-operations.service.ts](../apps/bff/src/identity/organization-operations.service.ts) |
+| 活动 SSE 与会话版本 | [session-stream-authorization.ts](../apps/bff/src/identity/session-stream-authorization.ts)、[sqlite-session-store.ts](../apps/bff/src/identity/sqlite-session-store.ts) |
+| 真实 Keycloak/HTTPS 验收 | [run-keycloak-smoke.mjs](../scripts/run-keycloak-smoke.mjs)、[keycloak-workflow.test.ts](../apps/bff/test/live/keycloak-workflow.test.ts) |
+| SaaS 页面身份与组织门禁 | [IdentityWorkspace.tsx](../apps/web-console/src/features/identity/IdentityWorkspace.tsx)、[TenantWorkflowPage.tsx](../apps/web-console/src/pages/TenantWorkflowPage.tsx) |
+| 浏览器与小规模负载验收 | [keycloak-browser.test.mjs](../apps/bff/test/live/keycloak-browser.test.mjs)、[keycloak-capacity.test.ts](../apps/bff/test/live/keycloak-capacity.test.ts) |
+| 发布与运行的组织审批策略 | [workflow-approval-policy.ts](../apps/bff/src/identity/workflow-approval-policy.ts) |
 | 未隔离节点的拒绝策略 | [tenant-execution-policy.ts](../apps/agent-cli/src/mastra/workflows/tenant-execution-policy.ts) |
 | 独立 Agent 进程回归 | [runtime-tenant-boundary.test.ts](../apps/bff/test/smoke/runtime-tenant-boundary.test.ts) |
 
@@ -114,7 +121,7 @@ M 表示里程碑。下面的勾选只表示该里程碑已完成验收，不能
 | 状态 | 里程碑 | 完成后的产品能力 | 主要前置条件 |
 | --- | --- | --- | --- |
 | 基础已实现，继续维护 | 基础：稳定性、认证、部分租户归属 | 身份与个人设置可用；Workflow 内部链路具备租户检查 | 当前代码基线 |
-| 进行中：M1-A/M1-B/M1-C 已实现，M1-D 待执行 | M1 组织权限 + 最小 Workflow 闭环 | 用户按权限创建、运行、审批受限工作流 | 现有身份和运行隔离 |
+| 进行中：M1-A/M1-B/M1-C 已实现，M1-D 页面与本机小规模负载已验证，待目标部署验收 | M1 组织权限 + 最小 Workflow 闭环 | 用户按权限创建、运行、审批受限工作流 | 现有身份和运行隔离 |
 | 待实施 | M2 模型连接与凭据隔离 | 可以运行不带工具的 LLM 工作流 | M1，模型权限与消耗限额 |
 | 待实施 | M3 Session 与 Memory 隔离 | 基础 Agent 聊天和历史记忆 | M1、M2 |
 | 待实施 | M4 技能、文件与工具隔离 | 逐项开放具有操作能力的 Agent | 组织权限、凭据范围、执行资源限制 |
@@ -165,11 +172,18 @@ v9 控制审计记录 requested/succeeded/failed，无法保存意图时不执�
 
 ### M1-D：走通完整入口，再按接口开放
 
-- [ ] 用测试 IdP 走通登录会话 → BFF controller/service → 数据库 → Agent → Runtime。
-- [ ] 覆盖组织切换、跨组织 ID、角色不足、审批幂等、SSE 断线回放和重启恢复。
-- [ ] 在真实部署的 OIDC 提供方上完成配置联调与验收。
+- [x] 用测试 IdP 走通登录会话 → BFF controller/service → 数据库 → Agent → Runtime。
+- [x] 覆盖组织切换、跨组织 ID、角色不足、审批幂等、SSE 断线回放和 BFF/Agent 重启恢复。
+- [x] 对已建立 SSE 补齐会话到期、注销及组织切换时的持续授权与关闭策略；数据库授权版本防止切回原组织后复活。
+- [x] 在隔离环境使用真实 Keycloak 26.4.7 Organizations 与 HTTPS 代理完成组织角色、成员移除、降权和签名注销验收。
+- [ ] 在用户真实目标部署完成 IdP、域名/证书、网络与代理配置验收。
 - [ ] 仅将验收通过的具体 API 加入 SaaS 白名单，同步更新部署说明。
-- [ ] 完成最小界面/API 联调演示，明确当前开放的节点和限制。
+- [x] 完成可重复运行的最小 HTTP/API 联调演示，明确开放的节点、接口与限制。
+- [x] 完成真实浏览器页面体验：真实登录、修订冲突、发布/审批/取消、跨组织及跨页签清理。
+- [x] 完成本机小规模混合负载：10 组织、10 waiting 运行、10 SSE、60 秒 600 次成功查询，取消和再次启动通过。
+- [ ] 完成目标部署的容量验收；首批目标：约 10 个组织、峰值 10 个并行运行。
+
+[完整入口说明](workflow-authenticated-entrypoint.md) 记录两批测试链路、精确接口、固定审批策略、活动连接失效与 Keycloak/HTTPS 验收命令。受限开关 `BFF_SAAS_WORKFLOW_ACCESS=restricted` 已在自动回归中启用，生产默认仍为 `disabled`；尚未勾选真实部署与生产开放。
 
 **M1 完成标准：** Alice 编辑并运行，获授权的 Bob 审批，Mallory 全程无法访问；未授权的同组织用户不能审批；服务重启后归属和幂等仍成立。
 
@@ -326,5 +340,11 @@ git diff --check
 | 2026-11-25 | M1-C 第二批：节点/流式输出、frame、事件 journal、产品/原生快照限制 | 构建、1,004 项全仓测试及结构/依赖边界检查通过；新增 21 项回归。覆盖资源失败不重试/不 fallback、容器完整输出计费、预留终态事件、LibSQL INSERT/JSONB 更新拒绝、真实 HTTP/SSE 与重启回放。组织并发/频率、草稿写入审计及 M1-D 待完成，浏览器业务入口仍关闭 |
 | 2026-11-26 | M1-C 第三批：原子运行准入、分类 HTTP 限流、SSE 连接治理与草稿/模板写入审计 | 构建、1,023 项全仓测试及结构/依赖边界检查通过；新增 19 项回归。覆盖组织/全局额度、waiting 与重启、准备失败撤销、JSON 读取失败拒绝和原子替换、SSE 断线释放、429 传递及审计故障回滚。当前单进程部署范围待验收；M1-D、生产容量和多副本共享配额未完成，浏览器业务入口仍关闭 |
 | 2026-11-27 | M1-C 提交前验收 | 复核租户身份与归属、权限和审计、输入/输出预算、原子运行配额与 SSE 释放；重新执行全仓构建、1,023 项测试、结构和依赖边界检查及 diff 检查，全部通过。按用户授权验收并提交当前开发分支；M1-D、生产容量和多副本部署仍待后续验收 |
+| 2026-11-27 | M1-D 第一批：登录到真实 Runtime 的完整入口、默认关闭的受限白名单、固定组织审批策略 | 构建、1,027 项全仓测试、结构与依赖边界检查通过，新增 4 项回归。覆盖发布、生产运行、重启后原会话审批、SSE 游标回放及注销；修复发布缺少策略解析器，拒绝 SaaS 草稿自报未知策略。活动 SSE 持续授权、真实 IdP/HTTPS、前端与容量验收仍待完成 |
+| 2026-11-27 | M1-D 第二批：活动 SSE 持续授权、会话版本迁移与真实 Keycloak/HTTPS 验收 | 构建、1,033 项全仓测试（live 另有 1 项跳过）和独立 Keycloak live 1 项通过；新增 6 项会话回归。复现并修复组织切换不断线、已发送响应后重复写 header、sid/sub 误伤其他会话；真实组织、降权、成员移除、签名注销与 Secure Cookie 均验收。默认业务开关仍关闭，目标环境、页面与容量仍待验收 |
+| 2026-11-27 | M1 完整复验与并发问题修复 | 1,035 项常规测试与独立真实 Keycloak/HTTPS live 通过。新增发布修订竞态和审批终态持久化窗口回归；真实服务验证 8 次并发启动仅接受 5 次、SSE 8/9 边界、SIGKILL 恢复、4 次同决定并发审批、300 次查询突发与限流隔离。autosave 精确入口修复；页面认证/组织接入、目标环境与生产容量仍未完成 |
+| 2026-11-28 | M1-D 受限 SaaS 页面、陈旧组织请求防护与首批规模验收 | 构建、1,041 项常规测试、结构/边界检查通过；独立真实浏览器与容量命令均通过（共 3 个不同 live 用例）。页面验证真实登录、修订冲突、发布/审批/取消、跨组织/多页签清理和模式读取故障默认拒绝；10 组织、10 waiting、10 SSE、一分钟 600 次成功查询，取消释放与再启动通过。目标域名/IdP/代理、长期运行与生产容量仍待验收，默认开关保持关闭；详见 M1 验收记录 |
 
 部署配置与当前开放范围以 [SaaS 身份与租户隔离说明](saas-identity.md) 为准；模块职责见 [架构说明](architecture.md)。后续开发同步维护这些文档，避免路线与实际实现脱节。
+
+2026-11-28 正式复验：用户授权直接验收后，重新执行构建、1,041 项常规测试、3 项真实 Keycloak/API/浏览器/容量 live、结构与依赖边界检查，全部通过。10 组织、10 waiting 运行、10 SSE 的 600 次查询全部成功，P95 70.37 ms、P99 75.54 ms。当前单机受限能力通过本地验收；目标部署和长期运行仍未验收，既有 LibSQL checkpoint 警告保留跟踪。详见 [正式复验记录](m1-acceptance-report.md#2026-11-28-用户授权后的正式复验)。

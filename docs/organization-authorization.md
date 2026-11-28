@@ -1,6 +1,6 @@
 # 组织角色与操作权限（M1-A / M1-B）
 
-> 当前状态：权限来源、权限矩阵、会话查询，以及 SOP / Workflow service 的逐操作校验已实现。浏览器业务白名单保持关闭，输入与资源限制、完整登录执行链路及真实 IdP 部署仍待后续验收。
+> 当前状态：权限、审计、资源边界、完整登录执行链路与活动 SSE 失效已实现，真实 Keycloak/HTTPS 隔离验收通过。默认业务开关仍关闭，目标环境、页面和容量验收尚未完成。
 
 ## 1. 这一增量解决什么
 
@@ -134,7 +134,9 @@ IdP 角色变化不一定自动发送后通道注销；部署验收必须检查�
 pnpm --filter agent-bff exec vitest run test/unit/identity test/smoke/saas-identity.test.ts
 ```
 
-真实 IdP 的角色映射与注销通知验收不由测试 IdP 替代。M1-C 资源边界已在当前单进程部署范围实现并验证；下一步按 [Server 路线的 M1-D 清单](server-development-roadmap.md) 完成完整入口与部署验收。
+真实 IdP 的角色映射与注销通知验收不由测试 IdP 替代。M1-D 已完成 [完整入口、活动 SSE 失效和真实 Keycloak/HTTPS 隔离验收](workflow-authenticated-entrypoint.md)；同机会话库其他连接的失效每 1 秒复查，本进程变更提交后同步通知。默认业务入口保持关闭，真实目标部署仍待验收。
+
+SaaS 的 Human Approval 目前只接受 `organization.workflow.approve` 策略。发布和运行复用同一固定目录；未知策略不能通过草稿中的 ID 自报为有效。该策略表达“当前组织中有审批权的非发起人”，不绕过权限矩阵、组织归属或自审批检查，也不支持客户端任意指定审批人。
 
 ## 7. 业务操作如何执行授权（M1-B）
 
