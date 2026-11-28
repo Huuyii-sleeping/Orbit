@@ -1,7 +1,7 @@
 import { lazy, Suspense, useEffect, useState } from "react";
 import { appRouteFromPathname } from "./app-route";
 
-const Workspace = lazy(() => import("./App").then((module) => ({ default: module.App })));
+const Workspace = lazy(() => import("../features/identity/IdentityWorkspace").then((module) => ({ default: module.IdentityWorkspace })));
 const Home = lazy(() => import("../pages/LandingPage").then((module) => ({ default: module.LandingPage })));
 
 /** 首页不装配工作台状态或请求；浏览器前进、后退时同步顶层页面。 */

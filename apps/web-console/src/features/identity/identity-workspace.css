@@ -1,0 +1,43 @@
+.tenant-studio { height:100%; min-height:0; overflow-y:auto; overflow-wrap:anywhere; background: var(--bg, #f6f7f9); color: var(--text, #17202a); }
+.tenant-topbar { display:flex; gap:20px; align-items:center; flex-wrap:wrap; padding:18px 28px; border-bottom:1px solid #dde1e8; background:var(--surface, #fff); }
+.tenant-brand { font-size:24px; font-weight:750; letter-spacing:-1px; color:inherit; text-decoration:none; }
+.tenant-topbar label { margin-left:auto; display:flex; align-items:center; gap:10px; }
+.tenant-user { max-width:220px; overflow:hidden; white-space:nowrap; text-overflow:ellipsis; }
+.tenant-entry { max-width:600px; height:100%; margin:0 auto; padding:80px 28px; box-sizing:border-box; overflow-y:auto; }
+.tenant-primary, .tenant-studio button, .tenant-entry button { cursor:pointer; border:1px solid #cbd2dc; border-radius:8px; padding:9px 14px; background:var(--surface, white); color:inherit; text-decoration:none; display:inline-block; }
+.tenant-studio button:disabled { opacity:.45; cursor:default; }
+.tenant-studio button.tenant-primary, .tenant-entry .tenant-primary { background:#2446c0; color:white; border-color:#2446c0; }
+.tenant-layout { max-width:1320px; margin:auto; padding:28px; display:grid; grid-template-columns:280px minmax(0,1fr); gap:24px; }
+.tenant-layout > aside { display:flex; flex-direction:column; gap:10px; }
+.tenant-layout > aside button { text-align:left; }
+.tenant-layout > aside button[aria-pressed=true] { border-color:#2446c0; background:#eef1ff; color:#152f91; }
+.tenant-card { padding:24px; background:var(--surface, white); border:1px solid #dde1e8; border-radius:12px; margin-bottom:18px; }
+.tenant-card h1, .tenant-card h2 { margin:0 0 16px; }
+.tenant-card label { display:block; margin:14px 0; }
+.tenant-studio input, .tenant-studio textarea, .tenant-studio select { max-width:100%; min-width:0; box-sizing:border-box; background:var(--surface, white); color:inherit; border:1px solid #cbd2dc; border-radius:6px; padding:9px; font:inherit; }
+.tenant-card input, .tenant-card textarea { display:block; width:100%; box-sizing:border-box; margin-top:8px; }
+.tenant-actions { display:flex; gap:10px; flex-wrap:wrap; align-items:center; }
+.tenant-caption { color:#667383; font-size:13px; }
+.tenant-error { background:#fff0ee; border:1px solid #ebc5be; color:#822c23; border-radius:8px; padding:14px; margin-bottom:16px; }
+.tenant-status { font-weight:650; }
+.tenant-run-list { display:grid; gap:8px; margin:16px 0; }
+.tenant-card pre { white-space:pre-wrap; overflow-wrap:anywhere; max-height:240px; overflow:auto; background:#f4f6fa; padding:12px; border-radius:8px; }
+@media (max-width:800px) { .tenant-layout { grid-template-columns:minmax(0,1fr); padding:16px; } .tenant-topbar { padding:16px; gap:12px; } .tenant-user { display:none; } }
+
+.tenant-layout > aside, .tenant-layout > div, .tenant-card { min-width:0; }
+.tenant-card h2 { font-size:20px; font-weight:650; }
+.tenant-studio .sop-run-interrupt { display:block; margin-top:20px; border-top:1px solid #dde1e8; padding-top:18px; }
+.tenant-studio .sop-interrupt-rail, .tenant-studio .sop-interrupt-identity, .tenant-studio .sop-interrupt-field code { display:none; }
+.tenant-studio .sop-interrupt-head { display:flex; flex-wrap:wrap; gap:12px; justify-content:space-between; }
+.tenant-studio .sop-interrupt-head span { display:block; font-size:13px; color:#667383; margin-top:4px; }
+.tenant-studio .sop-interrupt-head time { font-size:13px; color:#667383; display:flex; align-items:center; gap:6px; }
+.tenant-studio .sop-interrupt-head svg { width:16px; height:16px; }
+.tenant-studio .sop-interrupt-display { margin:18px 0; }
+.tenant-studio .sop-interrupt-display dt { font-weight:650; margin-bottom:8px; }
+.tenant-studio .sop-interrupt-display dd { margin:0; white-space:pre-wrap; overflow-wrap:anywhere; }
+.tenant-studio .sop-interrupt-field b { color:#a53636; margin-left:4px; }
+.tenant-studio .sop-interrupt-actions { display:flex; flex-wrap:wrap; gap:12px; margin-top:16px; }
+.tenant-studio .sop-interrupt-actions button { display:flex; align-items:center; gap:8px; }
+.tenant-studio .sop-interrupt-actions svg { width:18px; height:18px; }
+.tenant-studio .sop-interrupt-actions .approve { background:#2446c0; border-color:#2446c0; color:white; }
+.tenant-studio .sop-interrupt-error { color:#822c23; margin-top:12px; }

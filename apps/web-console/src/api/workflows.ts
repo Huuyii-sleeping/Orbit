@@ -1,3 +1,5 @@
+import { browserOrganizationContext } from "@orbit/runtime-contracts";
+import type { OrganizationRequestScope } from "./client";
 import { createAppError } from "../lib/errors/error-factory";
 import {
   isTerminalWorkflowRunStatus,
@@ -30,8 +32,8 @@ function workflowDraft(value: unknown): WorkflowDraft {
 }
 
 /** 读取服务端权威 SOP 草稿列表。 */
-export async function fetchSopDrafts(): Promise<WorkflowDraft[]> {
-  const response = await requestJson<{ data?: unknown }>("/api/sops");
+export async function fetchSopDrafts(scope?: OrganizationRequestScope): Promise<WorkflowDraft[]> {
+  const response = await requestJson<{ data?: unknown }>("/api/sops", undefined, scope);
   return Array.isArray(response.data) ? response.data.map(workflowDraft) : [];
 }
 
@@ -46,10 +48,12 @@ export async function fetchSopDraft(id: string): Promise<WorkflowDraft> {
 /** 在服务端创建 SOP 草稿。 */
 export async function createSopDraftRemote(
   draft: WorkflowDraft,
+  scope?: OrganizationRequestScope,
 ): Promise<WorkflowDraft> {
   const response = await requestJson<{ data?: unknown }>(
     "/api/sops",
     jsonRequest("POST", { draft }),
+    scope,
   );
   return workflowDraft(response.data);
 }
@@ -59,10 +63,12 @@ export async function saveSopDraftRemote(
   id: string,
   expectedRevision: number,
   draft: WorkflowDraft,
+  scope?: OrganizationRequestScope,
 ): Promise<WorkflowDraft> {
   const response = await requestJson<{ data?: unknown }>(
     `/api/sops/${encodeURIComponent(id)}`,
     jsonRequest("PUT", { expectedRevision, draft }),
+    scope,
   );
   return workflowDraft(response.data);
 }
@@ -96,10 +102,12 @@ export async function publishSopDraft(
   id: string,
   expectedRevision: number,
   releaseNotes = "",
+  scope?: OrganizationRequestScope,
 ): Promise<WorkflowVersion> {
   const response = await requestJson<{ data: WorkflowVersion }>(
     `/api/sops/${encodeURIComponent(id)}/publish`,
     jsonRequest("POST", { expectedRevision, releaseNotes }),
+    scope,
   );
   return response.data;
 }
@@ -107,9 +115,11 @@ export async function publishSopDraft(
 /** 读取 SOP 不可变版本摘要。 */
 export async function fetchSopVersions(
   id: string,
+  scope?: OrganizationRequestScope,
 ): Promise<SopVersionSummary[]> {
   const response = await requestJson<{ data?: SopVersionSummary[] }>(
     `/api/sops/${encodeURIComponent(id)}/versions`,
+    undefined, scope,
   );
   return Array.isArray(response.data) ? response.data : [];
 }
@@ -170,10 +180,12 @@ function workflowRun(value: unknown): WorkflowRunSnapshot {
 /** 启动单节点、草稿或发布版本运行。 */
 export async function startWorkflowRun(
   input: StartWorkflowRunInput,
+  scope?: OrganizationRequestScope,
 ): Promise<WorkflowRunSnapshot> {
   const response = await requestJson<{ data?: unknown }>(
     "/api/workflow-runs",
     jsonRequest("POST", input),
+    scope,
   );
   return workflowRun(response.data);
 }
@@ -191,10 +203,12 @@ export async function fetchWorkflowRun(
 /** 取消运行并返回 Agent 当前快照。 */
 export async function cancelWorkflowRun(
   runId: string,
+  scope?: OrganizationRequestScope,
 ): Promise<WorkflowRunSnapshot> {
   const response = await requestJson<{ data?: unknown }>(
     `/api/workflow-runs/${encodeURIComponent(runId)}/cancel`,
-    { method: "POST" },
+    jsonRequest("POST", {}),
+    scope,
   );
   return workflowRun(response.data);
 }
@@ -208,10 +222,12 @@ export async function resumeWorkflowRun(
     data: Record<string, unknown>;
     idempotencyKey: string;
   },
+  scope?: OrganizationRequestScope,
 ): Promise<WorkflowRunSnapshot> {
   const response = await requestJson<{ data?: unknown }>(
     `/api/workflow-runs/${encodeURIComponent(runId)}/resume`,
     jsonRequest("POST", input),
+    scope,
   );
   return workflowRun(response.data);
 }
@@ -229,6 +245,7 @@ const workflowEventTypes = [
 export function createWorkflowRunEventStream(input: {
   runId: string;
   sinceId?: number;
+  scope?: OrganizationRequestScope;
   onEvent: (event: WorkflowRuntimeEvent) => void;
   onError?: () => void;
   onTerminal?: (
@@ -240,7 +257,7 @@ export function createWorkflowRunEventStream(input: {
   if (!EventSourceImpl) throw createAppError("EventSource unavailable", { code: "BROWSER_UNSUPPORTED" });
   const delivered = new Set<number>();
   const source = new EventSourceImpl(
-    `/api/workflow-runs/${encodeURIComponent(input.runId)}/events?since_id=${input.sinceId ?? 0}`,
+    `/api/workflow-runs/${encodeURIComponent(input.runId)}/events?since_id=${input.sinceId ?? 0}${input.scope ? `&organizationContext=${encodeURIComponent(browserOrganizationContext(input.scope))}` : ""}`,
   );
   source.onerror = () => input.onError?.();
   for (const type of workflowEventTypes) {

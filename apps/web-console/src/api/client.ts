@@ -1,3 +1,4 @@
+import { browserOrganizationContext, type BrowserIdentitySession } from "@orbit/runtime-contracts";
 import { AppError, createAppError } from "../lib/errors/error-factory";
 
 /** BFF API 错误，展示前端文案，同时保留状态码、领域错误码和冲突元数据。 */
@@ -150,11 +151,21 @@ export async function readJsonResponse(response: Response) {
   return object;
 }
 
+/** 可选的浏览器组织预期，只用于拒绝陈旧请求，不能代替服务端身份。 */
+export type OrganizationRequestScope = Pick<BrowserIdentitySession, "issuer" | "user" | "tenantId">;
+
 /** 请求 BFF JSON，保留状态码及领域错误信息，页面无需解析服务端错误。 */
 export async function requestJson<T>(
   input: string,
   init?: RequestInit,
+  scope?: OrganizationRequestScope,
 ): Promise<T> {
+  if (scope) {
+    const headers = new Headers(init?.headers);
+    headers.set("X-Orbit-Organization-Context", browserOrganizationContext(scope));
+    const timeout = AbortSignal.timeout(15_000);
+    init = { ...init, headers, signal: init?.signal ? AbortSignal.any([init.signal, timeout]) : timeout };
+  }
   return (await readJsonResponse(await fetchResponse(input, init))) as T;
 }
 

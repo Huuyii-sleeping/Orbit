@@ -21,6 +21,7 @@ export default defineConfig({
         target: bffTarget,
         changeOrigin: true,
       },
+      "/auth": { target: bffTarget, changeOrigin: true },
     },
   },
   plugins: [tailwindcss(), react()],
