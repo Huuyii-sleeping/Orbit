@@ -1,3 +1,4 @@
+import type { BrowserWorkflowRunSummary } from "@orbit/runtime-contracts";
 import { Inject, Injectable, Optional } from "@nestjs/common";
 import { applyWorkflowRuntimeEventToSnapshot, type WorkflowRuntimeEvent } from "@orbit/workflow-core";
 import { assertWorkflowOutputBudget, WORKFLOW_OUTPUT_LIMITS } from "@orbit/workflow-core";
@@ -150,6 +151,16 @@ export class SqliteWorkflowRunsRepository implements WorkflowRunsRepository {
     const rows = this.storage.database.prepare("select id from workflow_runs where issuer = ? and tenant_id = ? and workflow_id = ? order by created_at desc, rowid desc limit ?")
       .all(issuer, tenantId, workflowId, limit) as Array<{ id: string }>;
     return rows.flatMap(({ id }) => { const run = this.getRun(id); return run ? [run] : []; });
+  }
+
+  listActivity(workflowId: string, limit = 10): BrowserWorkflowRunSummary[] {
+    const { issuer, tenantId } = this.storage.tenantScope();
+    this.cleanupExpired();
+    return this.storage.database.prepare(`select id, workflow_id as workflowId, mode, status,
+      created_at as createdAt, initiated_by as initiatedBy from workflow_runs
+      where issuer = ? and tenant_id = ? and workflow_id = ?
+      order by case when status in ('succeeded', 'failed', 'cancelled') then 1 else 0 end,
+      created_at desc, rowid desc limit ?`).all(issuer, tenantId, workflowId, limit) as BrowserWorkflowRunSummary[];
   }
 
   saveEvent(event: WorkflowRuntimeEvent): boolean {

@@ -12,6 +12,8 @@ export interface IdentityOptions {
     clientSecret: string;
     sessionSecret: string;
     sessionStorePath?: string;
+    /** 受限 Workflow 入口显式启用；默认关闭，部署方须先完成 IdP 验收。 */
+    workflowAccess?: "disabled" | "restricted";
   };
   filePath?: string;
 }
@@ -26,6 +28,7 @@ export type IdentityConfig = { mode: "local" } | {
   clientSecret: string;
   sessionSecret: string;
   sessionStorePath: string;
+  workflowAccess: "disabled" | "restricted";
 };
 
 /** 在创建数据库和目录前解析配置；配置错误不包含原值，避免泄漏秘密。 */
@@ -48,8 +51,10 @@ export function resolveIdentityConfig(options: IdentityOptions = {}, env: NodeJS
   if (!clientID?.trim() || clientID.length > 512) throw new Error("OIDC_CLIENT_ID is required and must be at most 512 characters");
   if (!clientSecret?.trim()) throw new Error("OIDC_CLIENT_SECRET is required");
   if (!sessionSecret || !/^[a-fA-F0-9]{64}$/.test(sessionSecret)) throw new Error("BFF_SESSION_SECRET must be 32 random bytes encoded as 64 hex characters");
+  const workflowAccess = explicit?.workflowAccess ?? env.BFF_SAAS_WORKFLOW_ACCESS ?? "disabled";
+  if (workflowAccess !== "disabled" && workflowAccess !== "restricted") throw new Error("BFF_SAAS_WORKFLOW_ACCESS must be disabled or restricted");
   return {
-    mode, baseURL, issuerBaseURL, jwksURL, clientID, clientSecret, sessionSecret,
+    mode, baseURL, issuerBaseURL, jwksURL, clientID, clientSecret, sessionSecret, workflowAccess,
     sessionStorePath: explicit?.sessionStorePath ?? env.BFF_SESSION_STORE_PATH ?? join(options.filePath ? dirname(options.filePath) : join(process.cwd(), ".data"), ".sessions", "bff-sessions.sqlite"),
   };
 }

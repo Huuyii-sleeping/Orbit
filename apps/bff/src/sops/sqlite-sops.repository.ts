@@ -143,10 +143,12 @@ export class SqliteSopsRepository implements SopsRepository {
     return this.storage.database.prepare("delete from sop_drafts where id = ? and issuer is ? and tenant_id is ?").run(id, issuer, tenantId).changes === 1;
   }
 
-  publishVersion(input: PublishVersionRecord): WorkflowVersion {
+  publishVersion(input: PublishVersionRecord, expectedRevision?: number): WorkflowVersion {
     return this.storage.database.transaction(() => {
       const { issuer, tenantId } = this.storage.tenantScope();
-      if (!this.getDraft(input.workflowId)) throw new SopNotFoundError("草稿", input.workflowId);
+      const draft = this.getDraft(input.workflowId);
+      if (!draft) throw new SopNotFoundError("草稿", input.workflowId);
+      if (expectedRevision !== undefined && draft.revision !== expectedRevision) throw new SopRevisionConflictError(draft);
       const next = this.storage.database.prepare("select coalesce(max(version), 0) + 1 as version from sop_versions where workflow_id = ? and issuer is ? and tenant_id is ?")
         .get(input.workflowId, issuer, tenantId) as { version: number };
       const version: WorkflowVersion = { ...input, id: randomUUID(), version: next.version };

@@ -3,6 +3,7 @@ import type { Request, Response } from "express";
 import { errorPayload, writeJson } from "../http/http-utils.js";
 import type { VerifiedIdentity } from "./organization-claims.js";
 import { organizationAccess } from "./organization-authorization.js";
+import type { BrowserIdentitySession } from "@orbit/runtime-contracts";
 
 type AuthenticatedRequest = Request & { orbit_session?: { orbitIdentity?: VerifiedIdentity } };
 
@@ -13,8 +14,9 @@ export class IdentityController {
   session(@Req() req: AuthenticatedRequest, @Res() res: Response) {
     const identity = req.orbit_session?.orbitIdentity;
     if (!identity) throw new Error("Authenticated identity is required");
-    writeJson(res, 200, { ok: true, user: { subject: identity.subject }, tenantId: identity.selectedTenantId,
-      organizations: identity.organizations, ...organizationAccess(identity) });
+    const session: BrowserIdentitySession = { issuer: identity.issuer, user: { subject: identity.subject }, tenantId: identity.selectedTenantId,
+      organizations: identity.organizations, ...organizationAccess(identity) };
+    writeJson(res, 200, { ok: true, ...session });
   }
 
   @Get("tenants")
@@ -33,7 +35,7 @@ export class IdentityController {
       writeJson(res, 403, errorPayload("TENANT_FORBIDDEN", "Tenant membership is required"));
       return;
     }
-    const selected = { ...identity, selectedTenantId: id, selectedAt: Date.now() };
+    const selected = { ...identity, selectedTenantId: id, selectedAt: Math.max(Date.now(), identity.selectedAt + 1) };
     req.orbit_session!.orbitIdentity = selected;
     writeJson(res, 200, { ok: true, tenantId: id, ...organizationAccess(selected) });
   }

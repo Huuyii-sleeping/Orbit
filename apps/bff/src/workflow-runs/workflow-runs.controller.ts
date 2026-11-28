@@ -1,6 +1,6 @@
 import { OrganizationAuthorizationError } from "../identity/organization-authorization.js";
 import { WorkflowResourceLimitError } from "@orbit/workflow-core";
-import { Body, Controller, Get, Inject, Param, Post, Req, Res } from "@nestjs/common";
+import { Body, Controller, Get, Inject, Param, Post, Query, Req, Res } from "@nestjs/common";
 import type { IncomingMessage, ServerResponse } from "node:http";
 import { errorPayload, writeJson } from "../http/http-utils.js";
 import { WorkflowRunControlError } from "./workflow-runs.errors.js";
@@ -28,6 +28,11 @@ export class WorkflowRunsController {
   @Post()
   start(@Body() body: StartWorkflowRunInput, @Res() res: ServerResponse): Promise<void> {
     return respond(res, 201, () => this.service.start(body));
+  }
+
+  @Get()
+  list(@Query("workflowId") workflowId: string | undefined, @Res() res: ServerResponse): Promise<void> {
+    return respond(res, 200, async () => this.service.list(workflowId ?? ""));
   }
 
   @Get(":id/events")

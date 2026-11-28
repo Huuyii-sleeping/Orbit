@@ -1,5 +1,7 @@
+import type { BrowserWorkflowRun } from "@orbit/runtime-contracts";
 import { createHash } from "node:crypto";
 import { OrganizationOperationsService } from "../identity/organization-operations.service.js";
+import { organizationWorkflowApprovalPolicies } from "../identity/workflow-approval-policy.js";
 import { writeStreamChunk } from "../stream-utils.js";
 import { Inject, Injectable } from "@nestjs/common";
 import type { IncomingMessage, ServerResponse } from "node:http";
@@ -141,13 +143,21 @@ export class WorkflowRunsService {
     return this.runs.listByWorkflow(`agent-test-${agentId}`);
   }
 
+  /** 当前组织工作流的近期运行索引，状态详情仍由 Runtime 查询。 */
+  list(workflowId: string) {
+    this.operations.require("workflow.read");
+    if (typeof workflowId !== "string" || !workflowId || workflowId.length > 512) throw new WorkflowRunControlError(400, "WORKFLOW_RUN_INVALID", "workflowId 为必填。");
+    if (!this.sops.getDraft(workflowId)) throw new WorkflowRunControlError(404, "SOP_NOT_FOUND", "Workflow 不存在。");
+    return this.runs.listActivity(workflowId);
+  }
+
   /** 查询 Agent 最新快照并同步本地索引。 */
-  async get(runId: string): Promise<WorkflowRunSnapshot> {
+  async get(runId: string): Promise<BrowserWorkflowRun> {
     this.operations.require("workflow.read");
     this.requireOwnedRun(runId);
     const run = runFrom(await this.agent.workflowRun(runId), { id: runId });
     this.runs.saveRun(run);
-    return run;
+    return { ...run, initiatedBy: this.runs.getInitiator(runId) };
   }
 
   /** 取消请求由 Agent 传播到 executor AbortSignal。 */
@@ -401,6 +411,9 @@ export class WorkflowRunsService {
       }
     };
     visitNodes(nodes);
+    if (this.storage.isTenantScoped && [...policyIds].some((id) => !organizationWorkflowApprovalPolicies.hasPolicy(id))) {
+      throw new WorkflowRunControlError(422, "WORKFLOW_APPROVAL_POLICY_UNAVAILABLE", "Workflow 引用的组织审批策略不存在或不可用。");
+    }
     return [...policyIds].sort();
   }
 

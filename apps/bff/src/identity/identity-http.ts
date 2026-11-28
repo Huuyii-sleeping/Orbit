@@ -1,3 +1,4 @@
+import { browserOrganizationContext } from "@orbit/runtime-contracts";
 import { auth } from "express-openid-connect";
 import { createRemoteJWKSet, jwtVerify } from "jose";
 import type { NextFunction, Request, Response } from "express";
@@ -6,14 +7,31 @@ import type { IdentityConfig } from "./identity-config.js";
 import { verifiedIdentityFromClaims, type VerifiedIdentity } from "./organization-claims.js";
 import { SqliteSessionStore } from "./sqlite-session-store.js";
 import { runWithOrganizationAuthorization } from "./organization-authorization.js";
+import { protectSessionStream } from "./session-stream-authorization.js";
 
 type AuthenticatedRequest = Request & { orbit_session: { orbitIdentity?: VerifiedIdentity } };
 
-const allowed = new Set([
+const identityAllowed = new Set([
   "GET /api/auth/session", "GET /api/auth/tenants", "POST /api/auth/tenant", "POST /api/auth/logout",
   "GET /api/profile", "PUT /api/profile", "GET /api/settings", "PATCH /api/settings",
 ]);
 const changes = new Set(["POST", "PUT", "PATCH", "DELETE"]);
+
+/** 只开放已经完成组织归属、权限和运行隔离验收的纯数据 Workflow API。 */
+function isAllowedSaasRoute(method: string, pathname: string, workflowAccess: boolean): boolean {
+  const route = `${method} ${pathname}`;
+  if (identityAllowed.has(route)) return true;
+  if (!workflowAccess) return false;
+  if (/^(GET|POST) \/api\/sops$/.test(route)) return true;
+  if (/^(GET|PUT) \/api\/sops\/(?!storage$|import$)[^/%]+$/.test(route)) return true;
+  if (/^POST \/api\/sops\/[^/%]+\/(?:publish|autosave)$/.test(route)) return true;
+  if (/^GET \/api\/sops\/[^/%]+\/versions(?:\/[^/%]+)?$/.test(route)) return true;
+  if (route === "POST /api/workflow-runs") return true;
+  if (route === "GET /api/workflow-runs") return true;
+  if (/^GET \/api\/workflow-runs\/[^/%]+(?:\/events)?$/.test(route)) return true;
+  if (/^POST \/api\/workflow-runs\/[^/%]+\/(?:cancel|resume)$/.test(route)) return true;
+  return false;
+}
 
 /** OIDC SDK 只处理协议与会话；此处执行 Orbit 自身的同源和租户授权边界。 */
 export function createIdentityHttp(config: Extract<IdentityConfig, { mode: "saas" }>) {
@@ -26,6 +44,8 @@ export function createIdentityHttp(config: Extract<IdentityConfig, { mode: "saas
     clientSecret: config.clientSecret,
     secret: config.sessionSecret,
     authRequired: false,
+    // 登录固定返回同源工作区，不采信任意 returnTo 查询参数。
+    getLoginState: () => ({ returnTo: `${config.baseURL}/studio` }),
     authorizationParams: { response_type: "code", scope: "openid profile email organization:*" },
     routes: { login: "/auth/login", logout: false, callback: "/auth/callback", backchannelLogout: "/auth/backchannel-logout" },
     session: {
@@ -65,8 +85,13 @@ export function createIdentityHttp(config: Extract<IdentityConfig, { mode: "saas
       writeJson(res, 401, errorPayload("AUTH_REQUIRED", "Sign in is required"));
       return;
     }
-    if (!allowed.has(route)) {
+    if (!isAllowedSaasRoute(req.method, url.pathname, config.workflowAccess === "restricted")) {
       writeJson(res, 403, errorPayload("SAAS_CAPABILITY_NOT_ISOLATED", "This capability is unavailable in shared SaaS mode"));
+      return;
+    }
+    const expectedContext = req.headers["x-orbit-organization-context"] ?? url.searchParams.get("organizationContext");
+    if (expectedContext && expectedContext !== browserOrganizationContext({ issuer: identity.issuer, user: { subject: identity.subject }, tenantId: identity.selectedTenantId })) {
+      writeJson(res, 409, errorPayload("ORGANIZATION_CONTEXT_CHANGED", "The browser organization context has changed; reload the workspace"));
       return;
     }
     if (changes.has(req.method)) {
@@ -79,6 +104,10 @@ export function createIdentityHttp(config: Extract<IdentityConfig, { mode: "saas
         return;
       }
     }
+    if (req.method === "GET" && /^\/api\/workflow-runs\/[^/%]+\/events$/.test(url.pathname) && !protectSessionStream(store, res)) {
+      writeJson(res, 401, errorPayload("AUTH_REQUIRED", "Sign in is required"));
+      return;
+    }
     runWithOrganizationAuthorization(identity, next);
   };
 
@@ -89,17 +118,21 @@ export function createIdentityHttp(config: Extract<IdentityConfig, { mode: "saas
   };
 
   const errorHandler = (_error: unknown, req: Request, res: Response, _next: NextFunction) => {
+    if (res.destroyed || res.writableEnded) return;
+    if (res.headersSent) { res.destroy(); return; }
     const callback = req.path === "/auth/callback";
     writeJson(res, callback ? 401 : 500, errorPayload(callback ? "AUTH_CALLBACK_INVALID" : "INTERNAL_ERROR", callback ? "Authentication failed" : "Request failed"));
   };
 
-  const safeOidc = (req: Request, res: Response, next: NextFunction) => oidc(req, res, (error?: unknown) => {
+  const safeOidc = (req: Request, res: Response, next: NextFunction) => store.runInRequest(() => oidc(req, res, (error?: unknown) => {
     if (error) {
+      if (res.destroyed || res.writableEnded) return;
+      if (res.headersSent) { res.destroy(); return; }
       writeJson(res, 401, errorPayload("AUTH_CALLBACK_INVALID", "Authentication failed"));
       return;
     }
     next();
-  });
+  }));
 
   return { store, headers, oidc: safeOidc, boundary, errorHandler };
 }

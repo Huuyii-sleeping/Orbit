@@ -780,6 +780,43 @@ describe("mastra/adapters/workflow-runtime-adapter", () => {
     })).rejects.toMatchObject({ code: "RUNTIME_TERMINAL_CONFLICT" });
   });
 
+  it("审批执行结束但终态尚未持久化时，相同决定的并发重试必须等待同一结果", async () => {
+    const root = await mkdtemp(path.join(tmpdir(), "orbit-approval-finalization-"));
+    roots.push({ root, persistenceEnabled: false });
+    const mastra = new Mastra({ storage: new InMemoryStore({ id: `approval-finalization-${Date.now()}` }),
+      logger: new ConsoleLogger({ name: "approval-finalization", level: LogLevel.WARN }) });
+    inMemoryMastras.push(mastra);
+    const runs = new MastraWorkflowRunRepository({ root, persistenceEnabled: false });
+    const port = new MastraWorkflowRuntimeAdapter({ root, persistenceEnabled: false, runs,
+      compiler: new MastraWorkflowCompilerAdapter({ mastra, executors: executorRegistry().register(new HumanApprovalWorkflowExecutor()) }) });
+    const run = await port.start({ workflow: humanApprovalWorkflow(), approvalPolicyIds: ["policy-1"], mode: "draft" });
+    await expect.poll(async () => (await port.get(run.id))?.status).toBe("waiting");
+    const waiting = await port.get(run.id);
+    const interruptId = waiting!.waiting!.waiting!.interruptId;
+    const command = { runId: run.id, stepId: "approval", resumeData: { interruptId, action: "approve", data: { comment: "ok" } },
+      interrupt: { interruptId, action: "approve" as const, idempotencyKey: "same-decision" } };
+    let release!: () => void;
+    const gate = new Promise<void>((resolve) => { release = resolve; });
+    let reached!: () => void;
+    const finalizing = new Promise<void>((resolve) => { reached = resolve; });
+    const update = runs.update.bind(runs);
+    const blocked = vi.spyOn(runs, "update").mockImplementation(async (record) => {
+      if (record.snapshot.status === "succeeded") { reached(); await gate; }
+      return update(record);
+    });
+    const first = port.resume(command);
+    let retry: Promise<Awaited<typeof first>> | undefined;
+    let settled = false;
+    try {
+      await finalizing;
+      retry = port.resume(command);
+      void retry.then(() => { settled = true; }, () => { settled = true; });
+      await new Promise((resolve) => setTimeout(resolve, 30));
+      expect(settled).toBe(false);
+    } finally { release(); await first; blocked.mockRestore(); }
+    await expect(retry).resolves.toMatchObject({ status: "succeeded" });
+  });
+
   it("查询或 SSE 重连过期 waiting run 时按 Mastra snapshot 自动执行 timeout", async () => {
     const root = await mkdtemp(path.join(tmpdir(), "orbit-mastra-workflow-approval-timeout-"));
     roots.push({ root, persistenceEnabled: false });

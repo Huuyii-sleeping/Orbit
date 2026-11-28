@@ -5,3 +5,4 @@ export * from "./tool.js";
 export * from "./memory.js";
 export * from "./gateway.js";
 export * from "./model-connections.js";
+export * from "./identity.js";

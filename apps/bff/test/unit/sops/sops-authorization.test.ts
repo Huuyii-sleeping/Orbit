@@ -7,6 +7,7 @@ import { SopsService } from "../../../src/sops/sops.service.js";
 import { runWithOrganizationAuthorization } from "../../../src/identity/organization-authorization.js";
 import { verifiedIdentityFromClaims } from "../../../src/identity/organization-claims.js";
 import { createTestDraft } from "./test-fixtures.js";
+import { ORGANIZATION_WORKFLOW_APPROVAL_POLICY } from "../../../src/identity/workflow-approval-policy.js";
 
 const databases: SopDatabase[] = [];
 afterEach(() => databases.splice(0).forEach((db) => db.onModuleDestroy()));
@@ -21,6 +22,46 @@ function setup() {
 }
 
 describe("SOP 业务授权", () => {
+  it("发布计算 hash 期间草稿被保存时必须冲突，不能发布用户未确认的旧修订", async () => {
+    const { service, database } = setup();
+    await runWithOrganizationAuthorization(identity(["admin"]), async () => {
+      const draft = service.createDraft(createTestDraft("publish-race"));
+      const publishing = service.publish(draft.id, { expectedRevision: 0 });
+      service.saveDraft(draft.id, { expectedRevision: 0, draft: { ...draft, name: "new revision" } });
+      await expect(publishing).rejects.toMatchObject({ code: "SOP_REVISION_CONFLICT", statusCode: 409 });
+      expect(service.listVersions(draft.id)).toEqual([]);
+      expect(service.getDraft(draft.id)).toMatchObject({ revision: 1, name: "new revision" });
+    });
+    expect(database.database.prepare("select phase from organization_audit_events where action = 'workflow.publish' order by rowid").all())
+      .toEqual([{ phase: "requested" }, { phase: "failed" }]);
+  });
+
+  it("发布只接受受支持的组织审批策略，未知策略不生成版本", async () => {
+    const { service } = setup();
+    await runWithOrganizationAuthorization(identity(["admin"]), async () => {
+      for (const policyId of [ORGANIZATION_WORKFLOW_APPROVAL_POLICY, "unknown-policy"]) {
+        const draft = createTestDraft(policyId);
+        const definition = builtinNodeRegistry.get("human-approval")!;
+        const config = { ...definition.createDefaultConfig(), policyId };
+        draft.nodes.splice(1, 0, { kind: "builtin", id: "approval", type: "human-approval", version: definition.version,
+          label: "审批", position: { x: 0, y: 80 }, config, ports: definition.createPorts(config) });
+        draft.edges = [
+          { id: "start-approval", source: { nodeId: "start", portId: "out" }, target: { nodeId: "approval", portId: "in" } },
+          { id: "approval-end", source: { nodeId: "approval", portId: "approved" }, target: { nodeId: "end", portId: "in" } },
+        ];
+        service.createDraft(draft);
+        if (policyId === ORGANIZATION_WORKFLOW_APPROVAL_POLICY) {
+          await expect(service.publish(draft.id, { expectedRevision: 0 })).resolves.toMatchObject({ createdBy: "alice" });
+        } else {
+          await expect(service.publish(draft.id, { expectedRevision: 0 })).rejects.toMatchObject({
+            code: "SOP_VALIDATION_FAILED", metadata: { diagnostics: expect.arrayContaining([expect.objectContaining({ code: "approval.policy-missing" })]) },
+          });
+          expect(service.listVersions(draft.id)).toEqual([]);
+        }
+      }
+    });
+  });
+
   it("导入、版本派生、模板生命周期和模板派生均有独立审计动作", async () => {
     const { database, service } = setup();
     await runWithOrganizationAuthorization(identity(["admin"]), async () => {

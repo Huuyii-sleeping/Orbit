@@ -359,7 +359,7 @@ export class MastraWorkflowRuntimeAdapter implements WorkflowRuntimePort {
         failure = observerError;
       }
       const cancelled = this.active.get(record.snapshot.id)?.cancelRequested === true;
-      return this.finishNativeResult(record, {
+      return await this.finishNativeResult(record, {
         status: cancelled ? "canceled" : "failed",
         error: failure,
       }, cancelled, mapper);
@@ -386,7 +386,8 @@ export class MastraWorkflowRuntimeAdapter implements WorkflowRuntimePort {
         },
       });
       await observer.close();
-      return this.finishNativeResult(
+      // 终态快照和事件持久化完成前保留 active，让同一审批决定的重试共享 completion。
+      return await this.finishNativeResult(
         record,
         result as NativeWorkflowResult,
         this.active.get(command.runId)?.cancelRequested === true,
@@ -400,7 +401,7 @@ export class MastraWorkflowRuntimeAdapter implements WorkflowRuntimePort {
         failure = observerError;
       }
       const cancelled = this.active.get(command.runId)?.cancelRequested === true;
-      return this.finishNativeResult(record, {
+      return await this.finishNativeResult(record, {
         status: cancelled ? "canceled" : "failed",
         error: failure,
       }, cancelled, mapper);

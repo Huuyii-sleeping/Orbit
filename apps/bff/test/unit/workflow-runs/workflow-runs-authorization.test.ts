@@ -10,6 +10,7 @@ import { OrganizationOperationsService } from "../../../src/identity/organizatio
 import { runWithOrganizationAuthorization } from "../../../src/identity/organization-authorization.js";
 import { verifiedIdentityFromClaims } from "../../../src/identity/organization-claims.js";
 import { createTestDraft } from "../sops/test-fixtures.js";
+import { builtinNodeRegistry } from "@orbit/workflow-core";
 
 const databases: SopDatabase[] = [];
 afterEach(() => databases.splice(0).forEach((db) => db.onModuleDestroy()));
@@ -43,6 +44,49 @@ function setup() {
 }
 
 describe("Workflow 控制操作授权", () => {
+  it("组织运行索引需要权限与工作流归属，并只返回当前组织的可信发起人", async () => {
+    const { service, runs, snapshot } = setup();
+    expect(() => service.list("workflow-a")).toThrowError(expect.objectContaining({ code: "PERMISSION_DENIED" }));
+    await runWithOrganizationAuthorization(identity(["viewer"]), async () => {
+      expect(() => service.list("")).toThrowError(expect.objectContaining({ statusCode: 400 }));
+      expect(() => service.list(["workflow-a"] as unknown as string)).toThrowError(expect.objectContaining({ statusCode: 400 }));
+      runs.saveRun(snapshot, "alice");
+      expect(service.list("workflow-a")).toEqual([expect.objectContaining({ id: "run-a", initiatedBy: "alice" })]);
+      expect(await service.get("run-a")).toMatchObject({ initiatedBy: "alice" });
+    });
+    for (const outsider of [identity(["admin"], "mallory", "org-b"), identity(["admin"], "mallory", "org-a", "other-issuer")]) {
+      runWithOrganizationAuthorization(outsider, () => {
+        expect(() => service.list("workflow-a")).toThrowError(expect.objectContaining({ statusCode: 404 }));
+      });
+    }
+  });
+
+  it("运行索引大小有界、不返回正文，老审批不会被新的终态记录挤出", () => {
+    const { service, runs, snapshot } = setup();
+    runWithOrganizationAuthorization(identity(["viewer"]), () => {
+      runs.saveRun({ ...snapshot, createdAt: Date.now() - 1000, inputs: { secret: "sensitive-input" } }, "alice");
+      for (let index = 0; index < 12; index++) runs.saveRun({ ...snapshot, id: `finished-${index}`, status: "succeeded", createdAt: Date.now() + index }, "alice");
+      const records = service.list("workflow-a");
+      expect(records).toHaveLength(10);
+      expect(records[0]).toMatchObject({ id: "run-a", status: "waiting" });
+      expect(records[0]).not.toHaveProperty("inputs");
+      expect(records[0]).not.toHaveProperty("nodeRuns");
+    });
+  });
+
+  it("SaaS 草稿不能通过自报审批策略声明其有效，未知策略在访问 Agent 前拒绝", async () => {
+    const { service, agent } = setup();
+    const draft = createTestDraft("workflow-a");
+    const definition = builtinNodeRegistry.get("human-approval")!;
+    const config = { ...definition.createDefaultConfig(), policyId: "forged-policy" };
+    draft.nodes.push({ kind: "builtin", id: "approval", type: "human-approval", version: definition.version,
+      label: "审批", position: { x: 0, y: 80 }, config, ports: definition.createPorts(config) });
+    await runWithOrganizationAuthorization(identity(["editor"]), async () => {
+      await expect(service.start({ workflowId: "workflow-a", mode: "draft", draft })).rejects.toMatchObject({ code: "WORKFLOW_APPROVAL_POLICY_UNAVAILABLE" });
+    });
+    expect(agent.startWorkflowRun).not.toHaveBeenCalled();
+  });
+
   it("可信发起人随运行保存，查询和后续快照不能覆盖；管理员也不能自审批", async () => {
     const { service, runs, agent, snapshot, database } = setup();
     await runWithOrganizationAuthorization(identity(["admin"]), async () => {

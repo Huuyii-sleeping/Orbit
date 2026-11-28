@@ -1,3 +1,4 @@
+import { browserOrganizationContext } from "@orbit/runtime-contracts";
 import { createHash, randomUUID } from "node:crypto";
 import { once } from "node:events";
 import { createServer, type Server } from "node:http";
@@ -123,7 +124,7 @@ function cookieJar() {
 
 async function login(baseURL: string, issuer: string) {
   const jar = cookieJar();
-  const start = await fetch(`${baseURL}/auth/login`, { redirect: "manual" });
+  const start = await fetch(`${baseURL}/auth/login?returnTo=https%3A%2F%2Fevil.example`, { redirect: "manual" });
   expect(start.status).toBe(302);
   jar.receive(start);
   const authorize = await fetch(start.headers.get("location")!, { redirect: "manual" });
@@ -141,14 +142,26 @@ describe("SaaS identity and shared database boundary", () => {
     state.organizationRoles = { "org-a": ["admin"], "org-b": ["viewer"] };
     const { jar, callback } = await login(baseURL, issuer);
     expect(callback.status).toBe(302);
+    expect(callback.headers.get("location")).toBe(`${baseURL}/studio`);
     const headers = { Cookie: jar.header(), "x-orbit-roles": "admin", "x-orbit-tenant-context": "forged" };
+    const publicConfig = await fetch(`${baseURL}/api/auth/config`);
+    expect(publicConfig.status).toBe(200);
+    expect(await publicConfig.json()).toEqual({ ok: true, mode: "saas", workflowAccess: "disabled" });
+    expect(publicConfig.headers.get("cache-control")).toBe("no-store");
+    expect(publicConfig.headers.get("access-control-allow-origin")).toBeNull();
     const session = await fetch(`${baseURL}/api/auth/session`, { headers });
-    expect(await session.json()).toMatchObject({ tenantId: "org-a", roles: ["admin"], permissions: expect.arrayContaining(["workflow.approve", "workflow.publish"]) });
+    expect(await session.json()).toMatchObject({ issuer, tenantId: "org-a", roles: ["admin"], permissions: expect.arrayContaining(["workflow.approve", "workflow.publish"]) });
     const switched = await fetch(`${baseURL}/api/auth/tenant`, {
       method: "POST", headers: { ...headers, Origin: baseURL, "Content-Type": "application/json" },
       body: JSON.stringify({ tenantId: "org-b", roles: ["admin"], permissions: ["workflow.approve"] }),
     });
     expect(switched.status).toBe(200);
+    const oldContext = browserOrganizationContext({ issuer, user: { subject: "user-1" }, tenantId: "org-a" });
+    const staleRequest = await fetch(`${baseURL}/api/auth/session`, { headers: { ...headers, "X-Orbit-Organization-Context": oldContext } });
+    expect(staleRequest.status).toBe(409);
+    expect(await staleRequest.json()).toMatchObject({ error: { code: "ORGANIZATION_CONTEXT_CHANGED" } });
+    const foreignSubject = browserOrganizationContext({ issuer, user: { subject: "different-user" }, tenantId: "org-b" });
+    expect((await fetch(`${baseURL}/api/auth/session`, { headers: { ...headers, "X-Orbit-Organization-Context": foreignSubject } })).status).toBe(409);
     expect(await switched.json()).toEqual({ ok: true, tenantId: "org-b", roles: ["viewer"], permissions: ["workflow.read"] });
     expect(await (await fetch(`${baseURL}/api/auth/session?roles=admin&tenantId=org-a`, { headers })).json())
       .toMatchObject({ tenantId: "org-b", roles: ["viewer"], permissions: ["workflow.read"] });

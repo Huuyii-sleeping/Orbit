@@ -1,3 +1,4 @@
+import type { BrowserWorkflowRunSummary } from "@orbit/runtime-contracts";
 import type {
   WorkflowDraft,
   WorkflowRunMode,
@@ -36,6 +37,8 @@ export interface WorkflowRunsRepository {
   getRun(runId: string): WorkflowRunSnapshot | null;
   /** 读取指定工作流的近期运行投影。 */
   listByWorkflow(workflowId: string, limit?: number): WorkflowRunSnapshot[];
+  /** 未完成运行优先的有界摘要，不让旧审批被新终态记录挤出。 */
+  listActivity(workflowId: string, limit?: number): BrowserWorkflowRunSummary[];
   saveEvent(event: WorkflowRuntimeEvent): boolean;
   listEvents(runId: string, sinceId?: number): WorkflowRuntimeEvent[];
 }

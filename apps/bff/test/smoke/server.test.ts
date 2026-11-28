@@ -476,6 +476,7 @@ describe("bff server", () => {
   it("forwards health, session, message, audit, and security APIs to the agent service", async () => {
     const agent = await startMockAgent();
     const bffBaseUrl = await startBff(agent.baseUrl);
+    await expect(requestJson(`${bffBaseUrl}/api/auth/config`)).resolves.toMatchObject({ status: 200, body: { ok: true, mode: "local", workflowAccess: "disabled" } });
 
     await expect(requestJson(`${bffBaseUrl}/api/health`)).resolves.toMatchObject({
       status: 200,

@@ -34,4 +34,14 @@ describe("identity configuration", () => {
     expect(() => resolveIdentityConfig({}, { ...env, NODE_ENV: "production", OIDC_BASE_URL: "http://127.0.0.1:3182" })).toThrow();
     expect(() => resolveIdentityConfig({}, { ...env, OIDC_JWKS_URL: "https://other.example.com/jwks" })).toThrow(/OIDC_JWKS_URL/);
   });
+
+  it("Workflow 业务入口默认关闭，仅接受明确的受限开放配置", () => {
+    expect(resolveIdentityConfig({}, env)).toMatchObject({ workflowAccess: "disabled" });
+    expect(resolveIdentityConfig({}, { ...env, BFF_SAAS_WORKFLOW_ACCESS: "restricted" })).toMatchObject({ workflowAccess: "restricted" });
+    expect(() => resolveIdentityConfig({}, { ...env, BFF_SAAS_WORKFLOW_ACCESS: "all" })).toThrow("BFF_SAAS_WORKFLOW_ACCESS");
+    expect(resolveIdentityConfig({ identity: {
+      mode: "saas", baseURL: env.OIDC_BASE_URL, issuerBaseURL: env.OIDC_ISSUER_URL, jwksURL: env.OIDC_JWKS_URL,
+      clientID: env.OIDC_CLIENT_ID, clientSecret: env.OIDC_CLIENT_SECRET, sessionSecret: env.BFF_SESSION_SECRET, workflowAccess: "disabled",
+    } }, { ...env, BFF_SAAS_WORKFLOW_ACCESS: "restricted" })).toMatchObject({ workflowAccess: "disabled" });
+  });
 });

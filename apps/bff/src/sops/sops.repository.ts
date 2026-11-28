@@ -10,7 +10,8 @@ export interface SopsRepository {
   createDraft(draft: WorkflowDraft): WorkflowDraft;
   updateDraft(id: string, expectedRevision: number, draft: WorkflowDraft): WorkflowDraft;
   deleteDraft(id: string, expectedRevision?: number): boolean;
-  publishVersion(version: PublishVersionRecord): WorkflowVersion;
+  /** 在同一发布事务中再次比较用户确认的草稿修订，防止异步预检期间发生更新。 */
+  publishVersion(version: PublishVersionRecord, expectedRevision?: number): WorkflowVersion;
   listVersions(workflowId: string): SopVersionSummary[];
   getVersion(workflowId: string, versionId: string): WorkflowVersion | null;
   getVersionById(versionId: string): WorkflowVersion | null;

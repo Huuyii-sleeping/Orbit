@@ -20,6 +20,7 @@ import { randomUUID } from "node:crypto";
 import { AGENT_VERSION_REPOSITORY } from "../agents/agent-version.repository.js";
 import { SopDatabase } from "../storage/sop-database.js";
 import { OrganizationOperationsService } from "../identity/organization-operations.service.js";
+import { organizationWorkflowApprovalPolicies } from "../identity/workflow-approval-policy.js";
 import { SopNotFoundError, SopRevisionConflictError, SopValidationError } from "./sops.errors.js";
 import { SOPS_REPOSITORY, type SopsRepository } from "./sops.repository.js";
 import { WORKFLOW_STAGE_E_CAPABILITY_REGISTRY } from "./workflow-stage-e-capabilities.js";
@@ -115,6 +116,7 @@ export class SopsService {
       } });
       const validation = validateWorkflowDraft(draft, {
         agentVersions: this.agentVersions,
+        ...(actor ? { approvalPolicies: organizationWorkflowApprovalPolicies } : {}),
         workflowVersions: {
           resolvePublishedVersion: (workflowId, versionId) => this.repository.getVersion(workflowId, versionId) ?? undefined,
         },
@@ -132,7 +134,7 @@ export class SopsService {
         nodes: draft.nodes,
         edges: draft.edges,
         metadata: { ...draft.metadata, name: draft.name, summary: draft.summary, sourceRevision: draft.revision },
-      });
+      }, input.expectedRevision);
     });
   }
 
